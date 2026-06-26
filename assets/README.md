@@ -1,0 +1,5 @@
+- `controls.json`: CrossFire control mapping and recording policy.
+- `tdm_rules.json`: Team Deathmatch rules and QA notes.
+- `transport_ship_2.json`: Transport Ship 2.0 map notes and template placeholders.
+- `scenario_template.json`: Baseline scenario configuration.
+- `recording_schema.json`: Expected shape of recorded input logs.

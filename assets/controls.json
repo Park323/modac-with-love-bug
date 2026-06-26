@@ -1,0 +1,52 @@
+{
+  "movement": {
+    "W": "forward",
+    "A": "strafe_left",
+    "S": "backward",
+    "D": "strafe_right",
+    "Space": "jump",
+    "Ctrl": "sit_or_crouch",
+    "Shift": "walk"
+  },
+  "combat": {
+    "mouse_move": "aim",
+    "mouse_left": "fire",
+    "mouse_right": "weapon_special_function",
+    "R": "reload",
+    "G": "drop_weapon",
+    "E": "disarm_bomb"
+  },
+  "weapon_switch": {
+    "1": "primary_weapon_1",
+    "2": "sub_weapon",
+    "3": "melee_weapon",
+    "4": "throwable_weapon",
+    "5": "c4",
+    "Q": "previous_weapon",
+    "B": "switch_bag"
+  },
+  "ui": {
+    "Tab": "scoreboard",
+    "Tilde": "tactical_map",
+    "Esc": "menu"
+  },
+  "recording_policy": {
+    "record_keyboard": true,
+    "record_mouse_buttons": true,
+    "record_mouse_move": true,
+    "mouse_move_format": "relative_delta",
+    "mouse_sample_hz": 60,
+    "ignore_keys": [
+      "F8",
+      "F9"
+    ]
+  },
+  "notes": {
+    "source": "Updated from in-game control settings screenshot captured on 2026-06-26.",
+    "mouse_sensitivity": "Captured settings: normal fire sensitivity 50, sniper sensitivity 49, unified sensitivity enabled.",
+    "mouse_polling_rate_support": "Captured setting: Off.",
+    "focus": "Recording/replay assumes the CrossFire game window is focused.",
+    "fullscreen": "CrossFire opens fullscreen in the current test environment, so use hotkey-armed recording instead of Alt+Tab during a match.",
+    "first_mvp": "Start recording after manually entering the TDM match. Keep clips short to reduce death/respawn desync."
+  }
+}

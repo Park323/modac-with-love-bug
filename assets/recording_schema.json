@@ -1,0 +1,47 @@
+{
+  "schema_version": "0.1",
+  "session": {
+    "session_id": "tdm_run_001",
+    "game": "CrossFire",
+    "mode": "Team Deathmatch",
+    "map": "Transport Ship 2.0",
+    "recorded_at": null,
+    "duration_sec": null,
+    "window_title": "CrossFire"
+  },
+  "environment": {
+    "screen_resolution": null,
+    "game_resolution": null,
+    "mouse_sensitivity": null,
+    "raw_input_enabled": null
+  },
+  "event_examples": [
+    {
+      "t": 0.0,
+      "type": "key_down",
+      "key": "W"
+    },
+    {
+      "t": 0.25,
+      "type": "mouse_move",
+      "dx": 12,
+      "dy": -3
+    },
+    {
+      "t": 0.5,
+      "type": "mouse_button_down",
+      "button": "left"
+    },
+    {
+      "t": 0.62,
+      "type": "mouse_button_up",
+      "button": "left"
+    },
+    {
+      "t": 1.0,
+      "type": "key_up",
+      "key": "W"
+    }
+  ],
+  "events": []
+}

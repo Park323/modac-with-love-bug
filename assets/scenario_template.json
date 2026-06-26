@@ -1,0 +1,65 @@
+{
+  "scenario_id": "tdm_transport_ship_basic",
+  "game": "CrossFire",
+  "mode": "Team Deathmatch",
+  "map": "Transport Ship 2.0",
+  "description": "Human-recorded input replay scenario for QA automation MVP.",
+  "scope": {
+    "entry": "manual_match_entry",
+    "automation_start": "hotkey_after_match_becomes_playable",
+    "automation_goal": "replay_same_short_input_sequence_multiple_times",
+    "recommended_clip_length_sec": "10-20"
+  },
+  "recording": {
+    "source": "human_play",
+    "file": "recordings/tdm_run_001.json",
+    "duration_sec": null,
+    "recorded_at": null,
+    "record_hotkey_start": "F8",
+    "record_hotkey_stop": "F9"
+  },
+  "replay_config": {
+    "repeat_count": 3,
+    "window_title": "CrossFire",
+    "mouse_sensitivity_locked": true,
+    "normal_fire_mouse_sensitivity": 50,
+    "sniper_mouse_sensitivity": 49,
+    "mouse_polling_rate_support": "off",
+    "mouse_move_format": "relative_delta",
+    "start_delay_sec": 3,
+    "abort_hotkey": "Esc"
+  },
+  "known_limitations": [
+    "If the player dies during replay, the later input timeline may desync because the player respawns at the start position.",
+    "For the first MVP, record short clips that are likely to finish before death.",
+    "Fullscreen, raw input, or anti-cheat behavior may affect replayed keyboard/mouse input."
+  ],
+  "capture_config": {
+    "enabled": true,
+    "capture_interval_sec": 0.1,
+    "output_dir": "runs"
+  },
+  "detection_config": {
+    "fps_threshold": 30,
+    "freeze_threshold_sec": 1.0,
+    "frame_diff_threshold": 2.0
+  },
+  "report_config": {
+    "enabled": true,
+    "format": "html",
+    "include_input_log": true,
+    "include_screenshots": true,
+    "include_timeline": true
+  },
+  "runs": {
+    "run_1": {
+      "note": "baseline replay"
+    },
+    "run_2": {
+      "note": "repeat replay"
+    },
+    "run_3": {
+      "note": "repeat replay"
+    }
+  }
+}

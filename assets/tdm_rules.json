@@ -1,0 +1,32 @@
+{
+  "mode": "Team Deathmatch",
+  "mode_aliases": [
+    "TDM",
+    "TD"
+  ],
+  "game": "CrossFire",
+  "expected_hackathon_environment": {
+    "server": "Philippines live server",
+    "map": "Transport Ship 2.0",
+    "team_size": 5
+  },
+  "teams": {
+    "bl": "Black List",
+    "gr": "Global Risk"
+  },
+  "rules": {
+    "objective": "Win by reaching the kill limit first or by having more kills when time expires.",
+    "respawn_delay_sec": 3,
+    "respawn_invincibility_sec": 4,
+    "friendly_kill_penalty": "Friendly kill can add score to the opposing team and subtract score from the friendly-kill team."
+  },
+  "match_end_conditions": [
+    "kill_limit_reached",
+    "time_limit_expired"
+  ],
+  "qa_relevance": [
+    "TDM is useful for repeated movement/combat scenarios.",
+    "Deaths and respawns can desync replay paths, so short scenarios are recommended for the first MVP.",
+    "Replay success should be judged by repeated execution and captured evidence, not by identical game state."
+  ]
+}

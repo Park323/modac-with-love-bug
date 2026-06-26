@@ -1,0 +1,70 @@
+{
+  "map_name": "Transport Ship 2.0",
+  "local_name": "수송선 2.0",
+  "mode": "Team Deathmatch",
+  "confidence": "unverified_reference",
+  "layout": {
+    "structure": "roughly_symmetric_left_right",
+    "bl_spawn": "one side of the ship",
+    "gr_spawn": "opposite side of the ship"
+  },
+  "routes": {
+    "center_deck": {
+      "name": "center deck",
+      "description": "Main combat route with containers and cover.",
+      "qa_focus": [
+        "fps_drop_during_combat",
+        "freeze_near_dense_objects"
+      ]
+    },
+    "tunnel": {
+      "name": "side tunnel",
+      "description": "Side route from spawn areas.",
+      "qa_focus": [
+        "stutter_at_entry",
+        "visibility_transition"
+      ]
+    },
+    "lower_deck": {
+      "name": "lower deck",
+      "description": "Lower ship route reachable by stairs.",
+      "qa_focus": [
+        "lighting_or_occlusion_issue",
+        "navigation_desync"
+      ]
+    }
+  },
+  "spawn_details": {
+    "note": "Exact spawn positions must be verified on the Windows game machine.",
+    "pattern": "random_position_within_spawn_area",
+    "confirmed_on_site": false
+  },
+  "templates_needed": {
+    "match_start_screen": {
+      "path": "assets/templates/match_start_screen.png",
+      "purpose": "Detect replay t=0 after manual match entry.",
+      "captured": false
+    },
+    "match_end_screen": {
+      "path": "assets/templates/match_end_screen.png",
+      "purpose": "Detect match completion.",
+      "captured": false
+    },
+    "respawn_screen": {
+      "path": "assets/templates/respawn_screen.png",
+      "purpose": "Detect death/respawn and optionally reset replay.",
+      "captured": false
+    },
+    "scoreboard_screen": {
+      "path": "assets/templates/scoreboard_screen.png",
+      "purpose": "Detect scoreboard state or validate Tab key behavior.",
+      "captured": false
+    }
+  },
+  "qa_detection_points": [
+    "center_deck_fps_drop",
+    "tunnel_entry_stutter",
+    "spawn_area_freeze",
+    "many_players_visible_performance_drop"
+  ]
+}

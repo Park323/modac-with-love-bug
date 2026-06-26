@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.py[cod]
+
+.env
+.env.*
+
+v1/action_clone/__pycache__/
+v1/recordings/*.json
+!v1/recordings/.gitkeep
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+Thumbs.db
+.DS_Store
