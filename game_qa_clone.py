@@ -182,6 +182,8 @@ user32.CallNextHookEx.restype = ctypes.c_long
 user32.UnhookWindowsHookEx.argtypes = [wintypes.HHOOK]
 user32.SendInput.argtypes = [wintypes.UINT, ctypes.POINTER(INPUT), ctypes.c_int]
 user32.SendInput.restype = wintypes.UINT
+kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
+kernel32.GetModuleHandleW.restype = wintypes.HMODULE
 
 
 def signed_word(value: int) -> int:
@@ -221,8 +223,14 @@ class Recorder:
         self.keyboard_hook = user32.SetWindowsHookExW(
             WH_KEYBOARD_LL, self.keyboard_proc, module, 0
         )
-        self.mouse_hook = user32.SetWindowsHookExW(WH_MOUSE_LL, self.mouse_proc, module, 0)
-        if not self.keyboard_hook or not self.mouse_hook:
+        if not self.keyboard_hook:
+            raise ctypes.WinError()
+        self.mouse_hook = user32.SetWindowsHookExW(
+            WH_MOUSE_LL, self.mouse_proc, module, 0
+        )
+        if not self.mouse_hook:
+            user32.UnhookWindowsHookEx(self.keyboard_hook)
+            self.keyboard_hook = None
             raise ctypes.WinError()
 
         msg = MSG()
