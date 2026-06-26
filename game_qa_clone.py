@@ -47,11 +47,29 @@ WM_MOUSEHWHEEL = 0x020E
 
 VK_CONTROL = 0x11
 VK_SHIFT = 0x10
+VK_MENU = 0x12
+VK_PRIOR = 0x21
+VK_NEXT = 0x22
+VK_END = 0x23
+VK_HOME = 0x24
+VK_LEFT = 0x25
+VK_UP = 0x26
+VK_RIGHT = 0x27
+VK_DOWN = 0x28
+VK_INSERT = 0x2D
+VK_DELETE = 0x2E
 VK_LSHIFT = 0xA0
 VK_RSHIFT = 0xA1
 VK_LCONTROL = 0xA2
 VK_RCONTROL = 0xA3
+VK_LMENU = 0xA4
+VK_RMENU = 0xA5
 VK_F12 = 0x7B
+VK_LBUTTON = 0x01
+VK_RBUTTON = 0x02
+VK_MBUTTON = 0x04
+VK_XBUTTON1 = 0x05
+VK_XBUTTON2 = 0x06
 
 INPUT_MOUSE = 0
 INPUT_KEYBOARD = 1
@@ -80,6 +98,33 @@ SM_CXVIRTUALSCREEN = 78
 SM_CYVIRTUALSCREEN = 79
 
 LLKHF_EXTENDED = 0x01
+MAPVK_VK_TO_VSC = 0
+KEYBOARD_VKS = [
+    vk
+    for vk in range(1, 256)
+    if vk not in {VK_LBUTTON, VK_RBUTTON, VK_MBUTTON, VK_XBUTTON1, VK_XBUTTON2}
+]
+MOUSE_BUTTONS = {
+    VK_LBUTTON: ("left_down", "left_up", 0),
+    VK_RBUTTON: ("right_down", "right_up", 0),
+    VK_MBUTTON: ("middle_down", "middle_up", 0),
+    VK_XBUTTON1: ("x_down", "x_up", 1),
+    VK_XBUTTON2: ("x_down", "x_up", 2),
+}
+EXTENDED_VKS = {
+    VK_RCONTROL,
+    VK_RMENU,
+    VK_INSERT,
+    VK_DELETE,
+    VK_HOME,
+    VK_END,
+    VK_PRIOR,
+    VK_NEXT,
+    VK_LEFT,
+    VK_UP,
+    VK_RIGHT,
+    VK_DOWN,
+}
 STOP_HOTKEY_VKS = {
     VK_CONTROL,
     VK_LCONTROL,
@@ -182,6 +227,12 @@ user32.CallNextHookEx.restype = ctypes.c_long
 user32.UnhookWindowsHookEx.argtypes = [wintypes.HHOOK]
 user32.SendInput.argtypes = [wintypes.UINT, ctypes.POINTER(INPUT), ctypes.c_int]
 user32.SendInput.restype = wintypes.UINT
+user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
+user32.GetAsyncKeyState.restype = ctypes.c_short
+user32.GetCursorPos.argtypes = [ctypes.POINTER(POINT)]
+user32.GetCursorPos.restype = wintypes.BOOL
+user32.MapVirtualKeyW.argtypes = [wintypes.UINT, wintypes.UINT]
+user32.MapVirtualKeyW.restype = wintypes.UINT
 kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
 kernel32.GetModuleHandleW.restype = wintypes.HMODULE
 
@@ -197,6 +248,29 @@ def high_word(value: int) -> int:
 
 def now() -> float:
     return time.perf_counter()
+
+
+def is_pressed(vk: int) -> bool:
+    return bool(user32.GetAsyncKeyState(vk) & 0x8000)
+
+
+def cursor_position() -> tuple[int, int]:
+    point = POINT()
+    if not user32.GetCursorPos(ctypes.byref(point)):
+        raise ctypes.WinError()
+    return int(point.x), int(point.y)
+
+
+def scan_code_for_vk(vk: int) -> int:
+    scan = int(user32.MapVirtualKeyW(vk, MAPVK_VK_TO_VSC))
+    if vk in {VK_LEFT, VK_UP, VK_RIGHT, VK_DOWN}:
+        return scan or {
+            VK_LEFT: 0x4B,
+            VK_UP: 0x48,
+            VK_RIGHT: 0x4D,
+            VK_DOWN: 0x50,
+        }[vk]
+    return scan
 
 
 class Recorder:
@@ -264,6 +338,7 @@ class Recorder:
         payload = {
             "version": 1,
             "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "capture_method": "hook",
             "stop_hotkey": "Ctrl+Shift+F12",
             "events": self.events,
         }
@@ -342,6 +417,114 @@ class Recorder:
                     event["button"] = high_word(int(data.mouseData))
                 self.events.append(event)
         return user32.CallNextHookEx(self.mouse_hook, n_code, w_param, l_param)
+
+
+class PollingRecorder:
+    def __init__(self, output: Path, move_interval: float, poll_interval: float) -> None:
+        self.output = output
+        self.move_interval = move_interval
+        self.poll_interval = poll_interval
+        self.events: list[dict] = []
+        self.start = now()
+        self.last_move_time = 0.0
+        self.last_move_pos: tuple[int, int] | None = None
+        self.key_states: dict[int, bool] = {}
+        self.button_states: dict[int, bool] = {}
+
+    def elapsed(self) -> float:
+        return round(now() - self.start, 6)
+
+    def stop_requested(self) -> bool:
+        return (
+            is_pressed(VK_F12)
+            and any(is_pressed(ctrl) for ctrl in CTRL_VKS)
+            and any(is_pressed(shift) for shift in SHIFT_VKS)
+        )
+
+    def remove_stop_hotkey_tail(self) -> None:
+        while self.events:
+            event = self.events[-1]
+            if event.get("kind") != "keyboard" or event.get("vk") not in STOP_HOTKEY_VKS:
+                break
+            self.events.pop()
+
+    def save(self) -> None:
+        self.remove_stop_hotkey_tail()
+        payload = {
+            "version": 1,
+            "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "capture_method": "poll",
+            "stop_hotkey": "Ctrl+Shift+F12",
+            "events": self.events,
+        }
+        self.output.parent.mkdir(parents=True, exist_ok=True)
+        self.output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        print(f"Saved {len(self.events)} events to {self.output}")
+
+    def run(self) -> None:
+        print("Recording with polling. Stop with Ctrl+Shift+F12.")
+        self.start = now()
+        self.key_states = {vk: is_pressed(vk) for vk in KEYBOARD_VKS}
+        self.button_states = {vk: is_pressed(vk) for vk in MOUSE_BUTTONS}
+        self.last_move_pos = cursor_position()
+        self.last_move_time = self.elapsed()
+
+        try:
+            while not self.stop_requested():
+                self.capture_keyboard()
+                self.capture_mouse()
+                time.sleep(self.poll_interval)
+        finally:
+            self.save()
+
+    def capture_keyboard(self) -> None:
+        event_time = self.elapsed()
+        for vk in KEYBOARD_VKS:
+            pressed = is_pressed(vk)
+            if pressed == self.key_states.get(vk, False):
+                continue
+            self.key_states[vk] = pressed
+            scan = scan_code_for_vk(vk)
+            if scan == 0:
+                continue
+            self.events.append(
+                {
+                    "t": event_time,
+                    "kind": "keyboard",
+                    "action": "down" if pressed else "up",
+                    "vk": vk,
+                    "scan": scan,
+                    "extended": vk in EXTENDED_VKS,
+                }
+            )
+
+    def capture_mouse(self) -> None:
+        x, y = cursor_position()
+        event_time = self.elapsed()
+        moved = self.last_move_pos != (x, y)
+        move_due = event_time - self.last_move_time >= self.move_interval
+        if moved and move_due:
+            self.last_move_pos = (x, y)
+            self.last_move_time = event_time
+            self.events.append(
+                {"t": event_time, "kind": "mouse", "action": "move", "x": x, "y": y}
+            )
+
+        for vk, (down_action, up_action, button) in MOUSE_BUTTONS.items():
+            pressed = is_pressed(vk)
+            if pressed == self.button_states.get(vk, False):
+                continue
+            self.button_states[vk] = pressed
+            event = {
+                "t": event_time,
+                "kind": "mouse",
+                "action": down_action if pressed else up_action,
+                "x": x,
+                "y": y,
+            }
+            if button:
+                event["button"] = button
+            self.events.append(event)
 
 
 def normalize_position(x: int, y: int) -> tuple[int, int]:
@@ -471,6 +654,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.01,
         help="minimum seconds between stored mouse move events (default: 0.01)",
     )
+    record_parser.add_argument(
+        "--poll-interval",
+        type=float,
+        default=0.005,
+        help="seconds between polling samples when --method poll is used (default: 0.005)",
+    )
+    record_parser.add_argument(
+        "--method",
+        choices=("poll", "hook"),
+        default="poll",
+        help="capture method. poll works better with many games; hook can capture wheel input",
+    )
 
     play_parser = sub.add_parser("play", help="play a scenario")
     play_parser.add_argument("input", type=Path, help="input JSON scenario path")
@@ -491,7 +686,16 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         if args.command == "record":
-            Recorder(args.output, args.move_interval).run()
+            if args.move_interval <= 0:
+                raise SystemExit("--move-interval must be greater than 0")
+            if args.method == "hook":
+                Recorder(args.output, args.move_interval).run()
+            else:
+                if args.poll_interval <= 0:
+                    raise SystemExit("--poll-interval must be greater than 0")
+                PollingRecorder(
+                    args.output, args.move_interval, args.poll_interval
+                ).run()
         elif args.command == "play":
             if args.speed <= 0:
                 raise SystemExit("--speed must be greater than 0")
