@@ -52,6 +52,7 @@ RESPAWN_RADIUS_PX      = 80.0   # within this distance of spawn = "just respawne
 MOVED_THRESHOLD_PX     = 150.0  # must travel this far from spawn before respawn can trigger
 TELEPORT_THRESHOLD_PX  = 200.0  # position jump larger than this in one poll = teleport
 MAX_RESTARTS           = 5      # abort after this many respawn recoveries
+MAX_RECORDING_SEC      = 30.0   # hard stop after this many seconds
 MAX_REROUTES           = 5      # max A* recomputes per single waypoint
 
 RESPAWN_SETTLE_MAX_SEC  = 8.0   # max time to wait for respawn animation to finish
@@ -139,8 +140,14 @@ class OptimizedNavigator(AutoNavigator):
     def _run_loop(self, waypoints: list[Waypoint]) -> None:
         wp_index      = 0
         restart_count = 0
+        deadline      = time.perf_counter() + MAX_RECORDING_SEC
 
         while wp_index < len(waypoints) and self._running:
+            if time.perf_counter() > deadline:
+                print(f"[NAV] Max recording time ({MAX_RECORDING_SEC}s) reached — stopping")
+                self._running = False
+                return
+
             wp = waypoints[wp_index]
             print(f"[NAV] Waypoint {wp_index + 1}/{len(waypoints)}: "
                   f"({wp.x:.0f}, {wp.y:.0f})  rot={wp.rot:.0f}°")
@@ -344,6 +351,9 @@ class OptimizedNavigator(AutoNavigator):
             dist = math.hypot(tx - state["x"], ty - state["y"])
             if dist <= threshold:
                 return "ok"
+
+            bearing = math.degrees(math.atan2(tx - state["x"], -(ty - state["y"]))) % 360
+            self._rotate_to(bearing, state["rot"])
 
         return "ok"
 

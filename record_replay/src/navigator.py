@@ -24,8 +24,8 @@ from .keys import NAME_TO_VK, scan_code_for_vk
 
 REACH_THRESHOLD_PX  = 50.0  # pixels — "close enough" to intermediate waypoint
 FINAL_REACH_PX      = 50.0  # pixels — "close enough" to final waypoint
-ROTATION_THRESH_DEG = 5.0    # degrees — "facing close enough"
-MOUSE_PX_PER_DEGREE = 0.5    # tune to match in-game sensitivity
+ROTATION_THRESH_DEG = 15.0   # degrees — "facing close enough"
+MOUSE_PX_PER_DEGREE = 46    # tune to match in-game sensitivity
 ROTATE_STEPS        = 10     # split each rotation into this many sub-steps
 ROTATE_STEP_SEC     = 0.005  # 5 ms between sub-steps → 50 ms total per rotation
 NAV_POLL_HZ         = 10     # position re-check rate while navigating
@@ -210,6 +210,9 @@ class AutoNavigator:
             dist = math.hypot(tx - state["x"], ty - state["y"])
             if dist <= threshold:
                 return
+
+            bearing = math.degrees(math.atan2(tx - state["x"], -(ty - state["y"]))) % 360
+            self._rotate_to(bearing, state["rot"])
 
     def _rotate_to(self, target_rot: float, current_rot: float) -> None:
         delta = (target_rot - current_rot + 180) % 360 - 180
