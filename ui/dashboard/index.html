@@ -30,7 +30,7 @@
           <div>
             <p class="eyebrow">Result Dashboard</p>
             <h2 class="page-title">결과 영상을 분석하고 리포트를 확인하세요.</h2>
-            <p class="page-copy">동영상 디렉토리 기반 분석을 시작하고, 완료 후 리포트 확인 영역으로 자연스럽게 이어지는 대시보드 초안입니다.</p>
+            <p class="page-copy">동영상 디렉토리 기반 분석을 시작하고, 완료 후 리포트를 제공하는 대시보드입니다.</p>
           </div>
           <div class="status-pill" aria-live="polite">
             <span class="status-dot" aria-hidden="true"></span>
@@ -61,10 +61,6 @@
 
                 <button class="primary-button" type="submit" data-start-analysis>분석 시작</button>
               </div>
-
-              <div class="integration-box">
-                연결 포인트: <strong>window.LovebugBridge.analyzeVideos(payload)</strong>가 있으면 호출하고, 없으면 콘솔에 payload를 출력합니다.
-              </div>
             </div>
           </form>
 
@@ -72,37 +68,48 @@
             <div class="panel__header">
               <div>
                 <h3 class="panel__title">분석 결과</h3>
-                <p class="panel__hint">요약, 실패 클립, 로그 비교, 다운로드 액션을 추가할 수 있는 영역입니다.</p>
+                <p class="panel__hint">테스트 결과 동영상의 분석 결과를 확인하세요.</p>
               </div>
             </div>
             <div class="panel__body">
               <div class="data-grid">
                 <div class="metric">
+                  <p class="metric__label">결과</p>
+                  <p class="metric__value" data-metric-report>-</p>
+                </div>
+                <div class="metric">
                   <p class="metric__label">분석 파일</p>
-                  <p class="metric__value">-</p>
+                  <p class="metric__value" data-metric-files>-</p>
                 </div>
                 <div class="metric">
-                  <p class="metric__label">감지 이슈</p>
-                  <p class="metric__value">-</p>
-                </div>
-                <div class="metric">
-                  <p class="metric__label">리포트</p>
-                  <p class="metric__value">-</p>
+                  <p class="metric__label">이슈 항목</p>
+                  <p class="metric__value" data-metric-issues>-</p>
                 </div>
               </div>
               <div class="progress" aria-label="분석 진행률">
                 <div class="progress__bar" data-progress></div>
               </div>
-              <div data-report-area>
-                <div class="empty-state">
-                  <div>
-                    <strong>아직 생성된 리포트가 없습니다.</strong>
-                    <span>분석을 시작하면 결과 리포트 카드가 이곳에 표시됩니다.</span>
-                  </div>
+            </div>
+          </aside>
+        </section>
+
+        <section class="report-row panel" aria-label="분석 리포트" data-report-panel hidden>
+          <div class="panel__header">
+            <div>
+              <h3 class="panel__title">상세 리포트</h3>
+              <p class="panel__hint">통과하지 못한 시나리오에 대한 상세 정보를 확인하세요.</p>
+            </div>
+          </div>
+          <div class="panel__body">
+            <div data-report-area>
+              <div class="empty-state">
+                <div>
+                  <strong>아직 생성된 리포트가 없습니다.</strong>
+                  <span>분석을 시작하면 결과 리포트 카드가 이곳에 표시됩니다.</span>
                 </div>
               </div>
             </div>
-          </aside>
+          </div>
         </section>
       </main>
     </div>

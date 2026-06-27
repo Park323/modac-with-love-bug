@@ -1,0 +1,25 @@
+{
+  "state_thresholds": {
+    "alive_playing": 0.50,
+    "engaging_enemy": 0.70,
+    "kill_confirmed_overlay": 0.55,
+    "dead_or_killcam": 0.55,
+    "killer_panel": 0.55,
+    "respawned_playing": 0.50,
+    "menu_or_loading": 0.60,
+    "unknown": 0.0
+  },
+  "feature_thresholds": {
+    "hud_presence_min": 0.18,
+    "crosshair_presence_min": 0.10,
+    "low_hud_presence_max": 0.12,
+    "template_min_score": 0.60
+  },
+  "temporal": {
+    "smoothing_window_sec": 0.8,
+    "merge_gap_sec": 0.8,
+    "min_segment_duration_sec": 0.2,
+    "respawn_after_death_window_sec": 8.0,
+    "stable_alive_after_respawn_sec": 0.5
+  }
+}

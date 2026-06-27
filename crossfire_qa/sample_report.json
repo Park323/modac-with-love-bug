@@ -1,0 +1,806 @@
+{
+    "schema_version": "1.0",
+    "report_type": "crossfire_video_only_qa_evidence_report",
+    "game": "CrossFire",
+    "generated_at": "2026-06-27T00:00:00+09:00",
+    "note": "Consolidated sample report based on the previously discussed PASS, UNCERTAIN, and NEED_REVIEW cases. Timestamps, confidences, and evidence paths are illustrative unless produced by an actual detector pipeline.",
+    "input_videos": [
+        {
+            "video_id": "2026-06-27-cf-demo-player1",
+            "video_path": "2026-06-27-cf-demo-player1.mp4",
+            "role": "player1_kill_scenario",
+            "resolution": "1280x720",
+            "fps": 30
+        },
+        {
+            "video_id": "2026-06-27-cf-demo-player2",
+            "video_path": "2026-06-27-cf-demo-player2.mp4",
+            "role": "player2_death_respawn_scenario",
+            "resolution": "1280x720",
+            "fps": 30
+        }
+    ],
+    "analysis_config": {
+        "pipeline": "video_only",
+        "sampling_strategy": {
+            "pass_1_fps": 5,
+            "pass_2_fps": 30,
+            "refine_window_sec": 2.0
+        },
+        "roi_layout": {
+            "resolution": "1280x720",
+            "top_score_bar": [
+                520,
+                0,
+                260,
+                45
+            ],
+            "kill_feed_area": [
+                880,
+                35,
+                390,
+                90
+            ],
+            "kill_medal_area": [
+                430,
+                430,
+                420,
+                170
+            ],
+            "death_killer_panel": [
+                820,
+                250,
+                420,
+                230
+            ],
+            "minimap": [
+                0,
+                20,
+                150,
+                150
+            ],
+            "location_text": [
+                35,
+                145,
+                130,
+                35
+            ],
+            "normal_hud": [
+                0,
+                600,
+                1280,
+                120
+            ]
+        },
+        "rules": {
+            "kill_count_after_kill_notification": {
+                "max_delay_sec": 2.0,
+                "stable_count_window_sec": 0.7
+            },
+            "death_notification_presence": {
+                "required_signals_any": [
+                    "killer_panel",
+                    "death_state",
+                    "respawn_afterward"
+                ]
+            },
+            "respawn_detection": {
+                "max_respawn_delay_sec": 5.0,
+                "min_alive_state_duration_sec": 0.5
+            },
+            "respawn_same_designated_area": {
+                "pass_threshold": 0.8,
+                "fail_threshold": 0.45,
+                "uncertain_margin": 0.1
+            }
+        }
+    },
+    "overall_result": "NEED_REVIEW",
+    "summary": {
+        "total_events": 7,
+        "total_checks": 5,
+        "result_counts": {
+            "PASS": 3,
+            "FAIL": 0,
+            "UNCERTAIN": 1,
+            "NEED_REVIEW": 1
+        },
+        "event_status_counts": {
+            "CONFIRMED": 5,
+            "INFERRED": 0,
+            "UNCERTAIN": 1,
+            "CONFLICT": 1
+        },
+        "by_check_type": {
+            "kill_count_after_kill_notification": {
+                "PASS": 1,
+                "FAIL": 0,
+                "UNCERTAIN": 1,
+                "NEED_REVIEW": 0
+            },
+            "death_notification_presence": {
+                "PASS": 1,
+                "FAIL": 0,
+                "UNCERTAIN": 0,
+                "NEED_REVIEW": 0
+            },
+            "respawn_same_designated_area": {
+                "PASS": 1,
+                "FAIL": 0,
+                "UNCERTAIN": 0,
+                "NEED_REVIEW": 1
+            }
+        },
+        "primary_uncertainty_causes": [
+            "COUNT_ROI_UNREADABLE",
+            "SIGNAL_CONFLICT"
+        ]
+    },
+    "events": [
+        {
+            "event_id": "evt_0001",
+            "video_id": "2026-06-27-cf-demo-player1",
+            "event_type": "kill_notification",
+            "status": "CONFIRMED",
+            "time_sec": 59.63,
+            "time_range_sec": [
+                59.43,
+                59.9
+            ],
+            "confidence": 0.94,
+            "source_signals": {
+                "kill_feed": {
+                    "detected": true,
+                    "confidence": 0.92,
+                    "roi": [
+                        880,
+                        35,
+                        390,
+                        90
+                    ]
+                },
+                "kill_medal": {
+                    "detected": true,
+                    "class": "FIRST_KILL",
+                    "confidence": 0.95,
+                    "roi": [
+                        430,
+                        430,
+                        420,
+                        170
+                    ]
+                },
+                "score_change_nearby": {
+                    "detected": true,
+                    "confidence": 0.89
+                }
+            },
+            "evidence": {
+                "full_frame": "evidence/frames/p1_0059_600_full.jpg",
+                "crops": [
+                    {
+                        "type": "kill_feed",
+                        "path": "evidence/crops/p1_0059_600_kill_feed.jpg"
+                    },
+                    {
+                        "type": "kill_medal",
+                        "path": "evidence/crops/p1_0059_600_kill_medal.jpg"
+                    }
+                ],
+                "clip": "evidence/clips/p1_kill_0057_0061.mp4"
+            }
+        },
+        {
+            "event_id": "evt_0002",
+            "video_id": "2026-06-27-cf-demo-player1",
+            "event_type": "kill_count_change",
+            "status": "CONFIRMED",
+            "time_sec": 59.86,
+            "time_range_sec": [
+                59.5,
+                60.2
+            ],
+            "confidence": 0.91,
+            "count": {
+                "target": "top_score_bar",
+                "side": "GR",
+                "from": 0,
+                "to": 1
+            },
+            "source_signals": {
+                "digit_reader": {
+                    "stable_before": {
+                        "value": 0,
+                        "window_sec": [
+                            57.5,
+                            59.4
+                        ],
+                        "confidence": 0.93
+                    },
+                    "stable_after": {
+                        "value": 1,
+                        "window_sec": [
+                            59.8,
+                            61.0
+                        ],
+                        "confidence": 0.9
+                    }
+                },
+                "temporal_smoothing": {
+                    "method": "majority_vote",
+                    "window_sec": 0.7,
+                    "outlier_frames_removed": 3
+                }
+            },
+            "evidence": {
+                "before_frame": "evidence/frames/p1_0058_900_full.jpg",
+                "after_frame": "evidence/frames/p1_0059_900_full.jpg",
+                "crops": [
+                    {
+                        "type": "score_bar_before",
+                        "path": "evidence/crops/p1_0058_900_score_bar.jpg"
+                    },
+                    {
+                        "type": "score_bar_after",
+                        "path": "evidence/crops/p1_0059_900_score_bar.jpg"
+                    }
+                ]
+            }
+        },
+        {
+            "event_id": "evt_0003",
+            "video_id": "2026-06-27-cf-demo-player2",
+            "event_type": "death_notification",
+            "status": "CONFIRMED",
+            "time_sec": 56.7,
+            "time_range_sec": [
+                56.4,
+                57.2
+            ],
+            "confidence": 0.88,
+            "source_signals": {
+                "killer_panel": {
+                    "detected": true,
+                    "confidence": 0.91,
+                    "roi": [
+                        820,
+                        250,
+                        420,
+                        230
+                    ]
+                },
+                "game_state": {
+                    "state": "dead_or_killcam",
+                    "confidence": 0.84
+                },
+                "hud_transition": {
+                    "normal_hud_disappeared": true,
+                    "confidence": 0.79
+                }
+            },
+            "evidence": {
+                "full_frame": "evidence/frames/p2_0056_700_full.jpg",
+                "crops": [
+                    {
+                        "type": "killer_panel",
+                        "path": "evidence/crops/p2_0056_700_killer_panel.jpg"
+                    }
+                ],
+                "clip": "evidence/clips/p2_death_0055_0058.mp4"
+            }
+        },
+        {
+            "event_id": "evt_0004",
+            "video_id": "2026-06-27-cf-demo-player2",
+            "event_type": "respawn",
+            "status": "CONFIRMED",
+            "time_sec": 58.03,
+            "time_range_sec": [
+                57.9,
+                58.4
+            ],
+            "confidence": 0.86,
+            "source_signals": {
+                "game_state": {
+                    "previous_state": "dead_or_killcam",
+                    "current_state": "alive_playing",
+                    "confidence": 0.87
+                },
+                "normal_hud_returned": {
+                    "detected": true,
+                    "confidence": 0.9
+                },
+                "crosshair_returned": {
+                    "detected": true,
+                    "confidence": 0.81
+                },
+                "weapon_hud_returned": {
+                    "detected": true,
+                    "confidence": 0.88
+                }
+            },
+            "evidence": {
+                "full_frame": "evidence/frames/p2_0058_000_full.jpg",
+                "crops": [
+                    {
+                        "type": "normal_hud",
+                        "path": "evidence/crops/p2_0058_000_hud.jpg"
+                    }
+                ],
+                "clip": "evidence/clips/p2_respawn_0057_0060.mp4"
+            }
+        },
+        {
+            "event_id": "evt_0005",
+            "video_id": "2026-06-27-cf-demo-player2",
+            "event_type": "spawn_location",
+            "status": "CONFIRMED",
+            "time_sec": 58.1,
+            "confidence": 0.84,
+            "expected_spawn": "BL Base",
+            "detected_spawn": "BL Base",
+            "source_signals": {
+                "location_text_reader": {
+                    "text": "BL Base",
+                    "confidence": 0.88,
+                    "dictionary_match": true,
+                    "roi": [
+                        35,
+                        145,
+                        130,
+                        35
+                    ]
+                },
+                "visual_spawn_matcher": {
+                    "best_match": "BL Base",
+                    "similarity": 0.82,
+                    "second_best_match": "BL Deck",
+                    "second_best_similarity": 0.61,
+                    "margin": 0.21
+                },
+                "minimap_position": {
+                    "inside_expected_spawn_zone": true,
+                    "confidence": 0.74
+                }
+            },
+            "final_spawn_score": 0.84,
+            "evidence": {
+                "full_frame": "evidence/frames/p2_0058_100_full.jpg",
+                "crops": [
+                    {
+                        "type": "location_text",
+                        "path": "evidence/crops/p2_0058_100_location_text.jpg"
+                    },
+                    {
+                        "type": "minimap",
+                        "path": "evidence/crops/p2_0058_100_minimap.jpg"
+                    }
+                ],
+                "reference_matches": [
+                    {
+                        "spawn": "BL Base",
+                        "reference_image": "references/spawn/BL_Base/ref_001.jpg",
+                        "similarity": 0.82
+                    },
+                    {
+                        "spawn": "BL Deck",
+                        "reference_image": "references/spawn/BL_Deck/ref_003.jpg",
+                        "similarity": 0.61
+                    }
+                ]
+            }
+        },
+        {
+            "event_id": "evt_0011",
+            "video_id": "example_uncertain_case",
+            "event_type": "kill_notification",
+            "status": "UNCERTAIN",
+            "time_sec": 72.3,
+            "time_range_sec": [
+                72.1,
+                74.5
+            ],
+            "confidence": 0.41,
+            "source_signals": {
+                "kill_notification": {
+                    "detected": true,
+                    "confidence": 0.93
+                },
+                "count_reader": {
+                    "readable": false,
+                    "ocr_confidence": 0.28,
+                    "roi": [
+                        520,
+                        0,
+                        260,
+                        45
+                    ]
+                }
+            },
+            "uncertainty": {
+                "type": "LOW_VISIBILITY",
+                "primary_cause": "COUNT_ROI_UNREADABLE"
+            },
+            "evidence": {
+                "full_frame": "evidence/frames/p1_0072_300_full.jpg",
+                "crops": [
+                    {
+                        "type": "score_bar",
+                        "path": "evidence/crops/p1_0072_300_score_bar.jpg"
+                    }
+                ],
+                "clip": "evidence/clips/p1_uncertain_0071_0075.mp4"
+            }
+        },
+        {
+            "event_id": "evt_0022",
+            "video_id": "example_conflict_case",
+            "event_type": "spawn_location",
+            "status": "CONFLICT",
+            "time_sec": 60.0,
+            "confidence": 0.52,
+            "expected_spawn": "BL Base",
+            "detected_spawn": "CONFLICT",
+            "source_signals": {
+                "location_text_reader": {
+                    "text": "BL Base",
+                    "confidence": 0.86,
+                    "dictionary_match": true
+                },
+                "visual_spawn_matcher": {
+                    "best_match": "BL Deck",
+                    "similarity": 0.83
+                },
+                "minimap_position": {
+                    "inside_expected_spawn_zone": false,
+                    "confidence": 0.78
+                }
+            },
+            "uncertainty": {
+                "type": "SIGNAL_CONFLICT",
+                "primary_cause": "LOCATION_TEXT_VS_VISUAL_MINIMAP_CONFLICT"
+            },
+            "evidence": {
+                "full_frame": "evidence/frames/p2_0060_000_full.jpg",
+                "crops": [
+                    {
+                        "type": "location_text",
+                        "path": "evidence/crops/p2_0060_000_location_text.jpg"
+                    },
+                    {
+                        "type": "minimap",
+                        "path": "evidence/crops/p2_0060_000_minimap.jpg"
+                    }
+                ],
+                "clip": "evidence/clips/p2_conflict_0058_0062.mp4"
+            }
+        }
+    ],
+    "qa_checks": [
+        {
+            "check_id": "check_0001",
+            "video_id": "2026-06-27-cf-demo-player1",
+            "check_type": "kill_count_after_kill_notification",
+            "result": "PASS",
+            "severity": "major",
+            "related_events": [
+                "evt_0001",
+                "evt_0002"
+            ],
+            "time_range_sec": [
+                59.43,
+                60.2
+            ],
+            "rule": {
+                "description": "Kill notification \ubc1c\uc0dd \ud6c4 2\ucd08 \uc774\ub0b4 kill count \ub610\ub294 top score\uac00 +1 \ub418\uc5b4\uc57c \ud55c\ub2e4.",
+                "max_delay_sec": 2.0
+            },
+            "observed": {
+                "kill_notification_time_sec": 59.63,
+                "count_change_time_sec": 59.86,
+                "delay_sec": 0.23,
+                "count_delta": 1
+            },
+            "confidence": 0.9,
+            "reason": "Kill notification\uacfc FIRST KILL medal\uc774 \ud655\uc778\ub418\uc5c8\uace0, 0.23\ucd08 \ub4a4 score\uac00 0\uc5d0\uc11c 1\ub85c \uc99d\uac00\ud588\ub2e4.",
+            "evidence": [
+                "evidence/frames/p1_0059_600_full.jpg",
+                "evidence/crops/p1_0059_600_kill_medal.jpg",
+                "evidence/crops/p1_0059_900_score_bar.jpg",
+                "evidence/clips/p1_kill_0057_0061.mp4"
+            ]
+        },
+        {
+            "check_id": "check_0002",
+            "video_id": "2026-06-27-cf-demo-player2",
+            "check_type": "death_notification_presence",
+            "result": "PASS",
+            "severity": "major",
+            "related_events": [
+                "evt_0003"
+            ],
+            "time_range_sec": [
+                56.4,
+                57.2
+            ],
+            "rule": {
+                "description": "\uc0ac\ub9dd \uc0c1\ud0dc \uc9c4\uc785 \uc2dc death notification \ub610\ub294 KILLER \ud328\ub110\uc774 \ud45c\uc2dc\ub418\uc5b4\uc57c \ud55c\ub2e4.",
+                "required_signals_any": [
+                    "killer_panel",
+                    "death_state",
+                    "respawn_afterward"
+                ]
+            },
+            "observed": {
+                "killer_panel_detected": true,
+                "game_state": "dead_or_killcam",
+                "confidence": 0.88
+            },
+            "confidence": 0.88,
+            "reason": "KILLER \ud328\ub110\uacfc dead_or_killcam \uc0c1\ud0dc\uac00 \ub3d9\uc2dc\uc5d0 \uac80\ucd9c\ub418\uc5c8\ub2e4.",
+            "evidence": [
+                "evidence/frames/p2_0056_700_full.jpg",
+                "evidence/crops/p2_0056_700_killer_panel.jpg",
+                "evidence/clips/p2_death_0055_0058.mp4"
+            ]
+        },
+        {
+            "check_id": "check_0003",
+            "video_id": "2026-06-27-cf-demo-player2",
+            "check_type": "respawn_same_designated_area",
+            "result": "PASS",
+            "severity": "critical",
+            "related_events": [
+                "evt_0003",
+                "evt_0004",
+                "evt_0005"
+            ],
+            "time_range_sec": [
+                56.4,
+                58.4
+            ],
+            "rule": {
+                "description": "\uc0ac\ub9dd \ud6c4 \uc9c0\uc815\ub41c spawn area\uc5d0\uc11c \ubd80\ud65c\ud574\uc57c \ud55c\ub2e4.",
+                "expected_spawn": "BL Base",
+                "pass_threshold": 0.8,
+                "fail_threshold": 0.45,
+                "uncertain_margin": 0.1
+            },
+            "observed": {
+                "death_time_sec": 56.7,
+                "respawn_time_sec": 58.03,
+                "respawn_delay_sec": 1.33,
+                "detected_spawn": "BL Base",
+                "spawn_score": 0.84,
+                "signals": {
+                    "location_text_match": true,
+                    "visual_similarity": 0.82,
+                    "minimap_position_match": true
+                }
+            },
+            "confidence": 0.84,
+            "reason": "\ubd80\ud65c \uc9c1\ud6c4 location text\uac00 BL Base\ub85c \uc77d\ud614\uace0, visual spawn matcher\ub3c4 BL Base reference\uc640 \uac00\uc7a5 \ub192\uc740 \uc720\uc0ac\ub3c4\ub97c \ubcf4\uc600\ub2e4.",
+            "evidence": [
+                "evidence/frames/p2_0056_700_full.jpg",
+                "evidence/frames/p2_0058_100_full.jpg",
+                "evidence/crops/p2_0058_100_location_text.jpg",
+                "evidence/crops/p2_0058_100_minimap.jpg",
+                "evidence/clips/p2_death_respawn_0055_0060.mp4"
+            ]
+        },
+        {
+            "check_id": "check_0004",
+            "video_id": "example_uncertain_case",
+            "check_type": "kill_count_after_kill_notification",
+            "result": "UNCERTAIN",
+            "severity": "major",
+            "related_events": [
+                "evt_0011"
+            ],
+            "time_range_sec": [
+                72.1,
+                74.5
+            ],
+            "rule": {
+                "description": "Kill notification \ubc1c\uc0dd \ud6c4 2\ucd08 \uc774\ub0b4 count\uac00 +1 \ub418\uc5b4\uc57c \ud55c\ub2e4.",
+                "max_delay_sec": 2.0
+            },
+            "observed": {
+                "kill_notification_detected": true,
+                "kill_notification_confidence": 0.93,
+                "count_readable": false,
+                "ocr_confidence": 0.28
+            },
+            "confidence": 0.41,
+            "reason": "Kill notification\uc740 \ud655\uc778\ub418\uc5c8\uc9c0\ub9cc, count \uc601\uc5ed\uc774 motion blur\uc640 compression noise\ub85c unreadable \uc0c1\ud0dc\uc600\ub2e4.",
+            "uncertainty": {
+                "type": "LOW_VISIBILITY",
+                "primary_cause": "COUNT_ROI_UNREADABLE",
+                "recommended_action": "MANUAL_REVIEW",
+                "retry_available": true,
+                "retry_methods": [
+                    "30fps_refine",
+                    "contrast_enhancement",
+                    "digit_template_matching"
+                ]
+            },
+            "evidence": [
+                "evidence/frames/p1_0072_300_full.jpg",
+                "evidence/crops/p1_0072_300_score_bar.jpg",
+                "evidence/clips/p1_uncertain_0071_0075.mp4"
+            ]
+        },
+        {
+            "check_id": "check_0005",
+            "video_id": "example_conflict_case",
+            "check_type": "respawn_same_designated_area",
+            "result": "NEED_REVIEW",
+            "severity": "critical",
+            "related_events": [
+                "evt_0022"
+            ],
+            "time_range_sec": [
+                58.0,
+                62.0
+            ],
+            "rule": {
+                "description": "\uc0ac\ub9dd \ud6c4 \uc9c0\uc815\ub41c spawn area\uc5d0\uc11c \ubd80\ud65c\ud574\uc57c \ud558\uba70, location/minimap/visual \uc2e0\ud638\uac00 \uc77c\uad00\ub418\uc5b4\uc57c \ud55c\ub2e4.",
+                "expected_spawn": "BL Base",
+                "pass_threshold": 0.8,
+                "fail_threshold": 0.45,
+                "uncertain_margin": 0.1
+            },
+            "observed": {
+                "expected_spawn": "BL Base",
+                "location_text": {
+                    "value": "BL Base",
+                    "confidence": 0.86
+                },
+                "visual_spawn_matcher": {
+                    "best_match": "BL Deck",
+                    "similarity": 0.83
+                },
+                "minimap_position": {
+                    "inside_expected_spawn_zone": false,
+                    "confidence": 0.78
+                }
+            },
+            "confidence": 0.52,
+            "reason": "Location text\ub294 BL Base\ub85c \uc77d\ud614\uc9c0\ub9cc visual matcher\uc640 minimap\uc740 BL Deck \ub610\ub294 \ub2e4\ub978 \uc704\uce58\ub97c \uc9c0\uc9c0\ud55c\ub2e4.",
+            "uncertainty": {
+                "type": "SIGNAL_CONFLICT",
+                "recommended_action": "MANUAL_REVIEW"
+            },
+            "evidence": [
+                "evidence/frames/p2_0060_000_full.jpg",
+                "evidence/crops/p2_0060_000_location_text.jpg",
+                "evidence/crops/p2_0060_000_minimap.jpg",
+                "evidence/clips/p2_conflict_0058_0062.mp4"
+            ]
+        }
+    ],
+    "uncertainty_policy": {
+        "event_statuses": [
+            "CONFIRMED",
+            "INFERRED",
+            "UNCERTAIN",
+            "MISSING",
+            "CONFLICT"
+        ],
+        "qa_results": [
+            "PASS",
+            "FAIL",
+            "UNCERTAIN",
+            "NEED_REVIEW"
+        ],
+        "principles": [
+            "\uac80\ucd9c \uc2e4\ud328\ub294 \uace7\ubc14\ub85c \uac8c\uc784 QA \uc2e4\ud328\ub85c \ucc98\ub9ac\ud558\uc9c0 \uc54a\ub294\ub2e4.",
+            "\uac80\ucd9c\uae30\uac00 \ud655\uc2e4\ud788 \ud310\ub2e8\ud558\uc9c0 \ubabb\ud55c \uacbd\uc6b0 UNCERTAIN\uc73c\ub85c \ub454\ub2e4.",
+            "\uac15\ud55c \uc2e0\ud638\ub4e4\uc774 \uc11c\ub85c \ucda9\ub3cc\ud558\ub294 \uacbd\uc6b0 NEED_REVIEW\ub85c \ub454\ub2e4.",
+            "FAIL\uc740 \uac8c\uc784 \ud654\uba74\uc774 \uae30\ub300 \uaddc\uce59\uc744 \uc5b4\uae34 \uac83\uc774 \ucda9\ubd84\ud788 \ud655\uc2e4\ud55c \uacbd\uc6b0\uc5d0\ub9cc \uc0ac\uc6a9\ud55c\ub2e4."
+        ]
+    },
+    "evidence_index": [
+        {
+            "path": "evidence/frames/p1_0059_600_full.jpg",
+            "type": "full_frame",
+            "related_events": [
+                "evt_0001"
+            ],
+            "related_checks": [
+                "check_0001"
+            ]
+        },
+        {
+            "path": "evidence/crops/p1_0059_600_kill_medal.jpg",
+            "type": "crop",
+            "related_events": [
+                "evt_0001"
+            ],
+            "related_checks": [
+                "check_0001"
+            ]
+        },
+        {
+            "path": "evidence/crops/p1_0059_900_score_bar.jpg",
+            "type": "crop",
+            "related_events": [
+                "evt_0002"
+            ],
+            "related_checks": [
+                "check_0001"
+            ]
+        },
+        {
+            "path": "evidence/frames/p2_0056_700_full.jpg",
+            "type": "full_frame",
+            "related_events": [
+                "evt_0003"
+            ],
+            "related_checks": [
+                "check_0002",
+                "check_0003"
+            ]
+        },
+        {
+            "path": "evidence/crops/p2_0056_700_killer_panel.jpg",
+            "type": "crop",
+            "related_events": [
+                "evt_0003"
+            ],
+            "related_checks": [
+                "check_0002"
+            ]
+        },
+        {
+            "path": "evidence/frames/p2_0058_100_full.jpg",
+            "type": "full_frame",
+            "related_events": [
+                "evt_0005"
+            ],
+            "related_checks": [
+                "check_0003"
+            ]
+        },
+        {
+            "path": "evidence/crops/p2_0058_100_location_text.jpg",
+            "type": "crop",
+            "related_events": [
+                "evt_0005"
+            ],
+            "related_checks": [
+                "check_0003"
+            ]
+        },
+        {
+            "path": "evidence/crops/p2_0058_100_minimap.jpg",
+            "type": "crop",
+            "related_events": [
+                "evt_0005"
+            ],
+            "related_checks": [
+                "check_0003"
+            ]
+        },
+        {
+            "path": "evidence/crops/p1_0072_300_score_bar.jpg",
+            "type": "crop",
+            "related_events": [
+                "evt_0011"
+            ],
+            "related_checks": [
+                "check_0004"
+            ]
+        },
+        {
+            "path": "evidence/crops/p2_0060_000_location_text.jpg",
+            "type": "crop",
+            "related_events": [
+                "evt_0022"
+            ],
+            "related_checks": [
+                "check_0005"
+            ]
+        }
+    ]
+}

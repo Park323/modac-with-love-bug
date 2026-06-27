@@ -1,0 +1,19 @@
+{
+  "base_resolution": [1920, 1080],
+  "rois": {
+    "top_score_bar": {"x": 780, "y": 0, "w": 390, "h": 68},
+    "kill_feed_area": {"x": 1320, "y": 53, "w": 585, "h": 135},
+    "kill_medal_area": {"x": 645, "y": 645, "w": 630, "h": 255},
+    "death_killer_panel": {"x": 1598, "y": 450, "w": 315, "h": 600},
+    "minimap": {"x": 0, "y": 30, "w": 225, "h": 225},
+    "location_text": {"x": 53, "y": 218, "w": 195, "h": 53},
+    "hp_ac_area": {"x": 0, "y": 975, "w": 285, "h": 105},
+    "weapon_ammo_area": {"x": 1515, "y": 915, "w": 405, "h": 165},
+    "crosshair": {"x": 915, "y": 495, "w": 90, "h": 90}
+  },
+  "anchors": {
+    "minimap": {"roi_name": "minimap", "search_padding": 68, "threshold": 0.55, "weight": 1.0},
+    "top_score_bar": {"roi_name": "top_score_bar", "search_padding": 90, "threshold": 0.55, "weight": 1.0},
+    "weapon_ammo_area": {"roi_name": "weapon_ammo_area", "search_padding": 105, "threshold": 0.5, "weight": 0.7}
+  }
+}

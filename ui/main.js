@@ -1,9 +1,10 @@
-const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
 const { spawn } = require("child_process");
+const fs = require("fs");
 const path = require("path");
 
-// 파이썬 스크립트 경로 — 프로그램 확정 후 교체
 const PYTHON_SCRIPT = path.join(__dirname, "..", "analyze.py");
+const isMock = process.argv.includes("--mock");
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -19,22 +20,59 @@ function createWindow() {
   win.loadFile(path.join(__dirname, "dashboard", "index.html"));
 }
 
-ipcMain.handle("select-folder", async () => {
+ipcMain.handle("select-raw-data-folder", async () => {
   const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
   return result.canceled ? null : result.filePaths[0];
 });
 
-ipcMain.handle("analyze-videos", (_, payload) => {
+function analyzeVideosMock(event) {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      const result = { resultDir: path.join(__dirname, "mock", "results") };
+      event.sender.send("analysis-complete", result);
+      resolve({ ok: true });
+    }, 1500);
+  });
+}
+
+function analyzeVideosReal(event, payload) {
   return new Promise((resolve, reject) => {
     const proc = spawn("python3", [PYTHON_SCRIPT, payload.videoDirectory], {
-      stdio: "inherit"
+      stdio: ["inherit", "pipe", "inherit"]
     });
+
+    let output = "";
+    proc.stdout.on("data", (chunk) => { output += chunk; });
+
     proc.on("close", (code) => {
-      if (code === 0) resolve({ ok: true });
-      else reject(new Error(`Python exited with code ${code}`));
+      if (code === 0) {
+        let result = { ok: true };
+        try { result = JSON.parse(output.trim()); } catch (_) {}
+        event.sender.send("analysis-complete", result);
+        resolve(result);
+      } else {
+        reject(new Error(`Python exited with code ${code}`));
+      }
     });
     proc.on("error", reject);
   });
+}
+
+ipcMain.handle("analyze-videos", (event, payload) =>
+  isMock ? analyzeVideosMock(event) : analyzeVideosReal(event, payload)
+);
+
+ipcMain.handle("open-analysis-result-folder", (_, folderPath) => shell.openPath(folderPath));
+
+ipcMain.handle("open-analysis-artifact", (_, resultDir, artifactPath) => {
+  if (!resultDir || !artifactPath) return "";
+  return shell.openPath(path.join(resultDir, artifactPath));
+});
+
+ipcMain.handle("read-package-manifest", (_, resultDir) => {
+  const packageManifest = path.join(resultDir, "package_manifest.json");
+  const raw = fs.readFileSync(packageManifest, "utf8");
+  return JSON.parse(raw);
 });
 
 app.whenReady().then(createWindow);

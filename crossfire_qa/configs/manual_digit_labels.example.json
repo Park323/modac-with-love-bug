@@ -1,0 +1,14 @@
+{
+  "labels": [
+    {
+      "frame_index": 1800,
+      "slot": "left_score",
+      "value": "1"
+    },
+    {
+      "frame_index": 1800,
+      "slot": "right_score",
+      "value": "0"
+    }
+  ]
+}
