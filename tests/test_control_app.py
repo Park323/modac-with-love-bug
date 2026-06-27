@@ -51,13 +51,37 @@ def test_start_bad_path_returns_400(client, tmp_path):
 
 
 def test_duplicate_start_returns_409(client, tmp_path):
-    big = _scenario(tmp_path, 5000)
-    r1 = client.post("/run/start", json={"path": big, "repeat": 1})
-    assert r1.status_code == 200
-    r2 = client.post("/run/start", json={"path": big, "repeat": 1})
-    assert r2.status_code == 409
-    client.post("/run/stop")
-    _poll_until_done(client)
+    import threading
+    import time
+
+    from manager.clock import Clock
+    from manager.runner import RunController
+    from manager.play_stub import StubPlayModule
+
+    entered = threading.Event()
+    gate = threading.Event()
+
+    class BlockingPlay(StubPlayModule):
+        def dispatch(self, item):
+            entered.set()
+            gate.wait(2.0)          # 첫 dispatch에서 블록 → 실행 상태 유지
+            super().dispatch(item)
+
+    app_module.controller = RunController(BlockingPlay(), Clock())
+    path = _scenario(tmp_path, 5)
+    try:
+        r1 = client.post("/run/start", json={"path": path, "repeat": 1})
+        assert r1.status_code == 200
+        assert entered.wait(2.0)    # 워커가 첫 dispatch에 진입할 때까지 대기
+        r2 = client.post("/run/start", json={"path": path, "repeat": 1})
+        assert r2.status_code == 409
+    finally:
+        gate.set()
+        app_module.controller.stop()
+        for _ in range(200):
+            if app_module.controller.status()["state"] in ("done", "stopped", "error"):
+                break
+            time.sleep(0.01)
 
 
 def test_browse_returns_path(client, monkeypatch):
