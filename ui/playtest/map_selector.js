@@ -1,6 +1,4 @@
 window.MapSelector = (function () {
-  const MAP_NAME = "Transport Ship 2.0";
-
   let mapInfo = null;
   let scale = 1;
   let waypoints = [];
@@ -86,7 +84,7 @@ window.MapSelector = (function () {
 
   // ── 패널 ──
   function scenario() {
-    return window.MapGeometry.buildScenario(waypoints, { map: MAP_NAME, size: mapInfo.size });
+    return window.MapGeometry.buildScenario(waypoints);
   }
 
   function updatePanel() {

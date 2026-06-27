@@ -35,21 +35,14 @@
     return true;
   }
 
-  // waypoint set → 시나리오 봉투 (모듈 전달용 입력 계약)
-  function buildScenario(waypoints, meta) {
-    const size = (meta && meta.size) || { width: 0, height: 0 };
-    return {
-      schema_version: "wp-0.1",
-      map: (meta && meta.map) || "unknown",
-      size: { width: size.width, height: size.height },
-      events: waypoints.map((wp, i) => ({
-        t: i,
-        type: "waypoint",
-        x: Math.round(wp.x),
-        y: Math.round(wp.y),
-        rot: +Number(wp.rot).toFixed(1),
-      })),
-    };
+  // waypoint set → 평탄 배열 [{idx,x,y,rot}] (모듈 전달용 입력)
+  function buildScenario(waypoints) {
+    return waypoints.map((wp, i) => ({
+      idx: i,
+      x: +Number(wp.x).toFixed(1),
+      y: +Number(wp.y).toFixed(1),
+      rot: +Number(wp.rot).toFixed(1),
+    }));
   }
 
   return { pointInPolygon, isWalkable, buildScenario };
