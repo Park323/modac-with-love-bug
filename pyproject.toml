@@ -35,6 +35,12 @@ train = [
     "torch>=2.2",
     "torchvision>=0.17",
 ]
+# Aim-bot perception (modac.aim): pretrained YOLO enemy detection + cyan IFF.
+# Pulls torch via ultralytics.  NOTE: ultralytics is AGPL-3.0 — for closed/commercial
+# use, get a commercial license or swap to a permissive detector (YOLOX, RT-DETR).
+aim = [
+    "ultralytics>=8.1",
+]
 
 [project.scripts]
 modac-server = "modac.server.run:main"
