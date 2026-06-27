@@ -16,7 +16,7 @@ class AutoRunController:
     def __init__(self, capture, analysis, play, clock: Clock,
                  logger=None, fps: float = 10.0,
                  max_consecutive_errors: int = 10,
-                 countdown_sec: float = 5.0, beep_at_sec: float = 3.0,
+                 countdown_sec: float = 0.0, beep_at_sec: float = 3.0,
                  beep_hz: int = 880, beep_ms: int = 120, beeper=None) -> None:
         self._capture = capture
         self._analysis = analysis
