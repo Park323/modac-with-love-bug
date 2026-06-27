@@ -10,8 +10,6 @@ snippet → [auto_run_action] → 캐릭터 이동 + 녹화 → scenario.json
                                               [RunController] 재생
 ```
 
-완전 standalone — 외부 프로젝트 모듈 의존 없음.
-
 ---
 
 ## 패키지 구조
@@ -35,7 +33,7 @@ auto_run_action/
 
 ## 모듈별 호출 & 입출력
 
-### `runner.py` — 진입점 (매니저가 직접 사용)
+### `runner.py` — 진입점
 
 ```python
 from auto_run_action import AutoRunAction
