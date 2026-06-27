@@ -14,6 +14,9 @@ from manager.capture_real import RealCaptureModule
 from manager.runner import RunController
 from manager.control.dialog import pick_json_file, pick_directory
 from manager.recorder_session import RecordSession, RecorderStartError
+from manager.autorun_controller import AutoRunController
+from manager.analysis_autorun import AutoRunAnalysis
+from manager.capture_stub import StubCaptureModule
 
 _UI_DIR = Path(__file__).resolve().parents[2] / "ui"
 _MOCK_RESULTS_DIR = _UI_DIR / "mock" / "results"
@@ -25,6 +28,10 @@ controller = RunController(
     RealPlayModule(), Clock(), realtime=True, capture=RealCaptureModule())
 
 recorder = RecordSession()
+
+autorun = AutoRunController(
+    RealCaptureModule(), AutoRunAnalysis(), RealPlayModule(), Clock(),
+    logger=recorder)
 
 
 def reset_controller() -> None:
@@ -42,6 +49,14 @@ def reset_recorder(factory=None) -> None:
         recorder = RecordSession()
 
 
+def reset_autorun() -> None:
+    """테스트용: 실제 OS 입력/캡처 없는 Stub autorun 컨트롤러로 교체."""
+    global autorun
+    autorun = AutoRunController(
+        StubCaptureModule(), AutoRunAnalysis(), StubPlayModule(), Clock(),
+        logger=None)
+
+
 class StartRequest(BaseModel):
     path: str
     repeat: int = 1
@@ -49,6 +64,10 @@ class StartRequest(BaseModel):
 
 class RecordStartRequest(BaseModel):
     duration_sec: float | None = None
+
+
+class AutoStartRequest(BaseModel):
+    waypoints: list[dict]
 
 
 class DashboardAnalyzeRequest(BaseModel):
@@ -80,6 +99,8 @@ def scenario_browse():
 def record_start(req: RecordStartRequest):
     if controller.status()["state"] == "running":
         raise HTTPException(status_code=409, detail="run in progress")
+    if autorun.status()["state"] == "running":
+        raise HTTPException(status_code=409, detail="autorun in progress")
     try:
         recorder.start(req.duration_sec)
     except RecorderStartError:
@@ -104,6 +125,8 @@ def record_status():
 def run_start(req: StartRequest):
     if recorder.is_recording:
         raise HTTPException(status_code=409, detail="recording in progress")
+    if autorun.status()["state"] == "running":
+        raise HTTPException(status_code=409, detail="autorun in progress")
     try:
         controller.start(req.path, req.repeat)
     except RuntimeError:
@@ -152,6 +175,32 @@ def dashboard_artifact(result_dir: str, path: str):
     if not artifact_path.exists() or not artifact_path.is_file():
         raise HTTPException(status_code=404, detail="artifact not found")
     return FileResponse(artifact_path)
+
+
+@app.post("/auto/start")
+def auto_start(req: AutoStartRequest):
+    if recorder.is_recording:
+        raise HTTPException(status_code=409, detail="recording in progress")
+    if controller.status()["state"] == "running":
+        raise HTTPException(status_code=409, detail="run in progress")
+    if not req.waypoints:
+        raise HTTPException(status_code=400, detail="waypoints required")
+    try:
+        autorun.start(req.waypoints)
+    except RuntimeError:
+        raise HTTPException(status_code=409, detail="already running")
+    return {"state": autorun.status()["state"]}
+
+
+@app.get("/auto/status")
+def auto_status():
+    return autorun.status()
+
+
+@app.post("/auto/stop")
+def auto_stop():
+    autorun.stop()
+    return {"state": autorun.status()["state"]}
 
 
 # 정적 UI는 모든 API 라우트 등록 후 마지막에 마운트 (same-origin).
