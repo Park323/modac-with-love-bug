@@ -18,6 +18,17 @@ REPORT_DIR = ROOT_DIR / "report_layer"
 CONFIG_DIR = ROOT_DIR / "configs"
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".avi", ".mkv"}
+STAGE_REPORT_FILES = {
+    "ui_detector": ("01_ui", "ui_detection_report.json"),
+    "kill_count_reader": ("02_kill_count", "kill_count_report.json"),
+    "notification_detector": ("03_notifications", "notification_report.json"),
+    "game_state_classifier": ("04_game_state", "game_state_report.json"),
+    "respawn_segment_detector": ("05_respawn", "respawn_segment_report.json"),
+    "spawn_location_recognizer": ("06_spawn_location", "spawn_location_report.json"),
+    "global_timeline": ("07_global_timeline", "global_event_timeline.json"),
+    "qa_rule_engine": ("08_qa_rules", "qa_rule_report.json"),
+    "evidence_report_generator": ("09_evidence_report", "report.json"),
+}
 
 
 def _default_config(name: str) -> str | None:
@@ -407,6 +418,22 @@ def _relpath(path_value: str | None, base_dir: Path) -> str | None:
         return str(path.resolve().relative_to(base_dir.resolve()))
     except Exception:
         return str(path)
+
+
+def _stage_report_links(video_id: str, output_dir: Path, out_root: Path) -> dict[str, Any]:
+    reports: dict[str, str] = {}
+    for stage_name, (stage_dir, file_name) in STAGE_REPORT_FILES.items():
+        path = output_dir / stage_dir / file_name
+        if path.exists():
+            reports[stage_name] = _relpath(str(path), out_root) or str(path)
+    pipeline_manifest = output_dir / "pipeline_manifest.json"
+    if pipeline_manifest.exists():
+        reports["pipeline_manifest"] = _relpath(str(pipeline_manifest), out_root) or str(pipeline_manifest)
+    return {
+        "video_id": video_id,
+        "output_dir": _relpath(str(output_dir), out_root),
+        "reports": reports,
+    }
 
 
 def _roi_layout(args: argparse.Namespace) -> dict[str, Any]:
@@ -893,6 +920,7 @@ def build_sample_style_final_report(
     uncertainty_causes: list[str] = []
     check_index = 0
     pipeline_manifests: list[dict[str, Any]] = []
+    packaged_stage_reports: list[dict[str, Any]] = []
     rule_cfg = _rule_config(args)
 
     for idx, video_result in enumerate(video_results, start=1):
@@ -917,6 +945,7 @@ def build_sample_style_final_report(
                 for key, value in (video_result.get("reports", {}) or {}).items()
             },
         })
+        packaged_stage_reports.append(_stage_report_links(video_id, output_dir, out_root))
 
         reports = video_result.get("reports", {}) or {}
         global_report = _json_load(Path(reports.get("global_timeline", ""))) or {}
@@ -1005,6 +1034,7 @@ def build_sample_style_final_report(
         },
         "evidence_index": list(evidence_index.values()),
         "run_reproducibility": _run_reproducibility(args, out_root),
+        "packaged_stage_reports": packaged_stage_reports,
     }
 
 

@@ -99,6 +99,9 @@ The root `final_report.json` is the main machine-readable report. It includes:
 - `decision_trace`
 - `trace_links`
 - `run_reproducibility`
+- `packaged_stage_reports`: per-video links to the 01-09 stage reports and
+  `pipeline_manifest.json`, appended at the end of the report for frontend
+  drill-down without changing the core event/check schema.
 
 If you run a different video or dataset, use a new `--out` directory or pass
 `--clean-output`. Otherwise older per-video folders can remain beside the new

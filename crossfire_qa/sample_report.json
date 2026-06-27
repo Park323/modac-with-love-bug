@@ -802,5 +802,23 @@
                 "check_0005"
             ]
         }
+    ],
+    "packaged_stage_reports": [
+        {
+            "video_id": "2026-06-27-cf-demo-player1",
+            "output_dir": "2026-06-27-cf-demo-player1",
+            "reports": {
+                "ui_detector": "2026-06-27-cf-demo-player1/01_ui/ui_detection_report.json",
+                "kill_count_reader": "2026-06-27-cf-demo-player1/02_kill_count/kill_count_report.json",
+                "notification_detector": "2026-06-27-cf-demo-player1/03_notifications/notification_report.json",
+                "game_state_classifier": "2026-06-27-cf-demo-player1/04_game_state/game_state_report.json",
+                "respawn_segment_detector": "2026-06-27-cf-demo-player1/05_respawn/respawn_segment_report.json",
+                "spawn_location_recognizer": "2026-06-27-cf-demo-player1/06_spawn_location/spawn_location_report.json",
+                "global_timeline": "2026-06-27-cf-demo-player1/07_global_timeline/global_event_timeline.json",
+                "qa_rule_engine": "2026-06-27-cf-demo-player1/08_qa_rules/qa_rule_report.json",
+                "evidence_report_generator": "2026-06-27-cf-demo-player1/09_evidence_report/report.json",
+                "pipeline_manifest": "2026-06-27-cf-demo-player1/pipeline_manifest.json"
+            }
+        }
     ]
 }
