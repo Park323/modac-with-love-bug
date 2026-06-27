@@ -1,0 +1,16 @@
+{
+  "forward": true,
+  "back": false,
+  "left": false,
+  "right": false,
+  "jump": false,
+  "crouch": false,
+  "sprint": false,
+  "yaw": -8.058664985244867,
+  "pitch": -4.4200107522529315,
+  "fire": false,
+  "aim": false,
+  "reload": false,
+  "use": false,
+  "weapon": 0
+}

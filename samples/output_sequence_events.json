@@ -1,0 +1,211 @@
+{
+  "schema_version": "0.1",
+  "session": {
+    "session_id": "sample_seq",
+    "game": "CrossFire",
+    "mode": "Team Deathmatch",
+    "map": "(mock)",
+    "recorded_at": "2026-06-27T00:00:00+00:00",
+    "duration_sec": 0.5,
+    "event_count": 29
+  },
+  "environment": {
+    "backend": "raw_input",
+    "note": "mouse_move dx/dy are relative raw-input counts"
+  },
+  "events": [
+    {
+      "t": 0.0,
+      "type": "key_down",
+      "key": "W",
+      "scan": 17,
+      "extended": false
+    },
+    {
+      "t": 0.0,
+      "type": "key_down",
+      "key": "D",
+      "scan": 32,
+      "extended": false
+    },
+    {
+      "t": 0.0,
+      "type": "mouse_move",
+      "dx": 20,
+      "dy": -4
+    },
+    {
+      "t": 0.05,
+      "type": "key_up",
+      "key": "W",
+      "scan": 17,
+      "extended": false
+    },
+    {
+      "t": 0.05,
+      "type": "key_up",
+      "key": "D",
+      "scan": 32,
+      "extended": false
+    },
+    {
+      "t": 0.05,
+      "type": "mouse_move",
+      "dx": -27,
+      "dy": 4
+    },
+    {
+      "t": 0.1,
+      "type": "key_down",
+      "key": "W",
+      "scan": 17,
+      "extended": false
+    },
+    {
+      "t": 0.1,
+      "type": "key_down",
+      "key": "LShift",
+      "scan": 42,
+      "extended": false
+    },
+    {
+      "t": 0.1,
+      "type": "mouse_move",
+      "dx": 5,
+      "dy": 1
+    },
+    {
+      "t": 0.15,
+      "type": "key_down",
+      "key": "A",
+      "scan": 30,
+      "extended": false
+    },
+    {
+      "t": 0.15,
+      "type": "key_down",
+      "key": "D",
+      "scan": 32,
+      "extended": false
+    },
+    {
+      "t": 0.15,
+      "type": "key_up",
+      "key": "LShift",
+      "scan": 42,
+      "extended": false
+    },
+    {
+      "t": 0.15,
+      "type": "mouse_move",
+      "dx": -4,
+      "dy": -2
+    },
+    {
+      "t": 0.2,
+      "type": "key_up",
+      "key": "A",
+      "scan": 30,
+      "extended": false
+    },
+    {
+      "t": 0.2,
+      "type": "key_up",
+      "key": "D",
+      "scan": 32,
+      "extended": false
+    },
+    {
+      "t": 0.2,
+      "type": "key_down",
+      "key": "LShift",
+      "scan": 42,
+      "extended": false
+    },
+    {
+      "t": 0.2,
+      "type": "mouse_move",
+      "dx": 4,
+      "dy": 0
+    },
+    {
+      "t": 0.25,
+      "type": "key_up",
+      "key": "W",
+      "scan": 17,
+      "extended": false
+    },
+    {
+      "t": 0.25,
+      "type": "key_up",
+      "key": "LShift",
+      "scan": 42,
+      "extended": false
+    },
+    {
+      "t": 0.25,
+      "type": "mouse_move",
+      "dx": 15,
+      "dy": -3
+    },
+    {
+      "t": 0.3,
+      "type": "key_down",
+      "key": "W",
+      "scan": 17,
+      "extended": false
+    },
+    {
+      "t": 0.3,
+      "type": "mouse_move",
+      "dx": -11,
+      "dy": 2
+    },
+    {
+      "t": 0.35,
+      "type": "mouse_move",
+      "dx": 10,
+      "dy": -4
+    },
+    {
+      "t": 0.4,
+      "type": "key_up",
+      "key": "W",
+      "scan": 17,
+      "extended": false
+    },
+    {
+      "t": 0.4,
+      "type": "mouse_move",
+      "dx": 10,
+      "dy": -5
+    },
+    {
+      "t": 0.45,
+      "type": "key_down",
+      "key": "W",
+      "scan": 17,
+      "extended": false
+    },
+    {
+      "t": 0.45,
+      "type": "key_down",
+      "key": "D",
+      "scan": 32,
+      "extended": false
+    },
+    {
+      "t": 0.45,
+      "type": "key_down",
+      "key": "LShift",
+      "scan": 42,
+      "extended": false
+    },
+    {
+      "t": 0.45,
+      "type": "mouse_move",
+      "dx": -15,
+      "dy": -1
+    }
+  ]
+}
