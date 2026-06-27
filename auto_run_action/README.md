@@ -1,6 +1,7 @@
 # auto_run_action
 
-매니저가 매 틱마다 두 함수를 호출해서 캐릭터를 자율 이동시키는 모듈.
+미니맵을 보고 캐릭터의 position 을 반환하는 모듈.
+캐릭터의 현재 position 과 목표 위치를 보고 다음 액션을 반환하는 모듈.
 
 ```
 frame → get_position() → position
