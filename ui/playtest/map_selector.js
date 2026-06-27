@@ -48,10 +48,12 @@ window.MapSelector = (function () {
   function drawMap() {
     const s = (pts) => pts.map((p) => toCanvas(p[0], p[1]));
     for (const wall of mapInfo.walls || []) {
-      drawPolygon(s(wall.polygon), "#2c2c3e", null, 0);
+      if (wall.polygon) drawPolygon(s(wall.polygon), "#2c2c3e", null, 0);
       for (const hole of wall.holes || []) drawPolygon(s(hole), "#c5d0d4", "#8fa0a5", 0.5);
     }
-    for (const obj of mapInfo.objects || []) drawPolygon(s(obj.polygon), "#6d7a7c", "#556062", 1);
+    for (const obj of mapInfo.objects || []) {
+      if (obj.polygon) drawPolygon(s(obj.polygon), "#6d7a7c", "#556062", 1);
+    }
   }
 
   function drawWaypoints() {
@@ -183,7 +185,8 @@ window.MapSelector = (function () {
     canvas.addEventListener("mouseleave", commit);
 
     document.querySelector("[data-copy-json]").addEventListener("click", () => {
-      navigator.clipboard.writeText(JSON.stringify(scenario(), null, 2));
+      navigator.clipboard.writeText(JSON.stringify(scenario(), null, 2))
+        .catch(() => setCoord("복사 실패", true));
     });
     document.querySelector("[data-download-json]").addEventListener("click", () => {
       const blob = new Blob([JSON.stringify(scenario(), null, 2)], { type: "application/json" });
