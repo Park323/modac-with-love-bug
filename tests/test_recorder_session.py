@@ -91,3 +91,36 @@ def test_duration_auto_stops(tmp_path):
             break
         time.sleep(0.01)
     assert rs.status()["state"] == "done"
+
+
+def test_generation_guard_stale_timer_does_not_stop_new_session(tmp_path):
+    """Leftover timer from session 1 must not stop session 2 (generation guard)."""
+    f = _factory(2)
+    rs = RecordSession(recorder_factory=f, output_root=tmp_path)
+
+    # Session 1: start with auto-stop timer, then manually stop it.
+    # manual stop() sets _done_evt, which wakes the session-1 timer immediately.
+    rs.start(duration_sec=0.2)
+    rs.stop()
+    assert rs.status()["state"] == "done"
+
+    # Session 2: start fresh — increments _generation so any still-running
+    # session-1 timer will see a mismatch and abort without calling stop().
+    rs.start()
+    rec2 = f.holder["r"]  # FakeRecorder created for session 2
+
+    # Wait long enough for any lingering session-1 timer thread to have
+    # acquired the lock, checked the generation, and returned.
+    time.sleep(0.15)
+
+    assert rs.status()["state"] == "recording", (
+        "Stale timer from session 1 stopped session 2 prematurely"
+    )
+    assert rec2.save_calls == 0, (
+        "Stale timer called save() on session 2's recorder"
+    )
+
+    # Clean up session 2 normally.
+    rs.stop()
+    assert rs.status()["state"] == "done"
+    assert rec2.save_calls == 1

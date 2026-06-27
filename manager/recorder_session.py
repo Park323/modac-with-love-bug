@@ -16,6 +16,7 @@ Threading safety:
 
 from __future__ import annotations
 
+import time
 import threading
 from pathlib import Path
 from typing import Callable, Optional
@@ -57,6 +58,7 @@ class RecordSession:
         self._event_count: Optional[int] = None
         self._duration_sec: Optional[float] = None
         self._error: Optional[str] = None
+        self._generation: int = 0  # incremented each start(); guards stale timers
 
     # ------------------------------------------------------------------
     # Public API
@@ -74,6 +76,11 @@ class RecordSession:
             self._duration_sec = None
             self._error = None
             self._done_evt.clear()
+
+            # Increment generation so any leftover timer from a previous session
+            # will detect it is stale and abort before calling stop().
+            self._generation += 1
+            gen = self._generation
 
             # Build session directory + input_path.
             started_at = utc_now_iso()
@@ -97,7 +104,14 @@ class RecordSession:
         for _ in range(400):
             if recorder.is_recording:
                 break
-            threading.Event().wait(0.005)
+            time.sleep(0.005)
+
+        if not recorder.is_recording:
+            msg = "recorder failed to start within 2s"
+            with self._lock:
+                self._state = "error"
+                self._error = msg
+            raise RuntimeError(msg)
 
         with self._lock:
             self._rec_thread = rec_thread
@@ -108,9 +122,12 @@ class RecordSession:
             def _timer_fn():
                 # Wait for either done_evt (manual stop) or the timeout.
                 self._done_evt.wait(duration_sec)
-                # Only call stop if the event was NOT set by a manual stop.
-                # If it was set, stop() already ran — stop() is idempotent so
-                # calling it again is safe, but we avoid the extra work.
+                # Guard against stale timers from a previous session: if the
+                # generation has changed, a new session started — do not stop it.
+                with self._lock:
+                    if self._generation != gen:
+                        return
+                # Lock released by exiting the with-block; stop() acquires its own lock.
                 self.stop()
 
             t = threading.Thread(target=_timer_fn, daemon=True, name="recorder-timer")
