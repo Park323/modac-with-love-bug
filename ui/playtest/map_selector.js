@@ -50,12 +50,12 @@ window.MapSelector = (function () {
       for (const hole of wall.holes || []) drawPolygon(s(hole), "#c5d0d4", "#8fa0a5", 0.5);
     }
     for (const obj of mapInfo.objects || []) {
-      if (obj.polygon) drawPolygon(s(obj.polygon), "#6d7a7c", "#556062", 1);
-    }
-    // 클릭 허용 통로(walkable:true)만 초록 강조 → 찍을 수 있는 곳 표시
-    for (const obj of mapInfo.objects || []) {
-      if (obj.walkable === true && obj.polygon) {
-        drawPolygon(s(obj.polygon), "rgba(46,204,113,0.38)", "rgba(39,174,96,0.95)", 1.5);
+      if (!obj.polygon) continue;
+      if (obj.walkable === true) {
+        // 클릭 허용 통로 = 바닥(배경)색으로 → 걷기가능 영역처럼 보이게
+        drawPolygon(s(obj.polygon), "#c5d0d4", "#8fa0a5", 0.5);
+      } else {
+        drawPolygon(s(obj.polygon), "#6d7a7c", "#556062", 1);  // 장애물
       }
     }
   }
