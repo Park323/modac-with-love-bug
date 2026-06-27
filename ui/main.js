@@ -64,8 +64,14 @@ ipcMain.handle("analyze-videos", (event, payload) =>
 
 ipcMain.handle("open-analysis-result-folder", (_, folderPath) => shell.openPath(folderPath));
 
-ipcMain.handle("read-final-report", (_, resultDir) => {
-  const raw = fs.readFileSync(path.join(resultDir, "final_report.json"), "utf8");
+ipcMain.handle("open-analysis-artifact", (_, resultDir, artifactPath) => {
+  if (!resultDir || !artifactPath) return "";
+  return shell.openPath(path.join(resultDir, artifactPath));
+});
+
+ipcMain.handle("read-package-manifest", (_, resultDir) => {
+  const packageManifest = path.join(resultDir, "package_manifest.json");
+  const raw = fs.readFileSync(packageManifest, "utf8");
   return JSON.parse(raw);
 });
 

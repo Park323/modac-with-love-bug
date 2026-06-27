@@ -2,7 +2,7 @@
 const { bridge, formatTime, qs, setText } = window.Lovebug;
 
 const QA_RESULTS = ["FAIL", "UNCERTAIN", "NEED_REVIEW", "PASS"];
-const QA_FILTERS = ["ALL", ...QA_RESULTS];
+const REVIEW_FILTERS = ["ALL", "FAIL", "UNCERTAIN", "NEED_REVIEW"];
 const DEFAULT_PAGE_SIZE = 10;
 
 function esc(value) {
@@ -19,17 +19,51 @@ function fmtNumber(value, digits = 3) {
   return typeof value === "number" ? value.toFixed(digits) : "-";
 }
 
-function fmtTimeRange(range) {
-  if (!Array.isArray(range) || range.length === 0) return "-";
-  return range.map((value) => fmtNumber(value)).join(" - ");
-}
-
 function resultClass(result) {
   return QA_RESULTS.includes(result) ? result.toLowerCase().replace("_", "-") : "unknown";
 }
 
+function getChecks(report) {
+  if (Array.isArray(report.checks)) return report.checks;
+  if (Array.isArray(report.qa_checks)) return report.qa_checks;
+  return [];
+}
+
+function getAnalyzedFileCount(report) {
+  if (Array.isArray(report.input_videos)) return report.input_videos.length;
+  const names = getChecks(report)
+    .map((check) => check.video_name || check.video_id)
+    .filter(Boolean);
+  return new Set(names).size || "-";
+}
+
+function getIssueCount(report) {
+  return report.review_summary?.shown_checks ?? getChecks(report).length;
+}
+
+function resetResultMetrics() {
+  setText("[data-metric-report]", "-");
+  setText("[data-metric-files]", "-");
+  setText("[data-metric-issues]", "-");
+  const reportMetric = qs("[data-metric-report]");
+  if (reportMetric) {
+    reportMetric.classList.remove("metric__value--pass", "metric__value--fail");
+  }
+}
+
+function renderResultMetrics(report) {
+  setText("[data-metric-report]", report.overall_result || "READY");
+  setText("[data-metric-files]", getAnalyzedFileCount(report));
+  setText("[data-metric-issues]", getIssueCount(report));
+  const reportMetric = qs("[data-metric-report]");
+  if (reportMetric) {
+    reportMetric.classList.remove("metric__value--pass", "metric__value--fail");
+    reportMetric.classList.add(report.overall_result === "PASS" ? "metric__value--pass" : "metric__value--fail");
+  }
+}
+
 function getResultCounts(report) {
-  const checks = Array.isArray(report.qa_checks) ? report.qa_checks : [];
+  const checks = getChecks(report);
   const counts = Object.fromEntries(QA_RESULTS.map((result) => [result, 0]));
 
   if (report.summary?.result_counts) {
@@ -48,21 +82,19 @@ function getResultCounts(report) {
 function renderSummary(report) {
   const summary = report.summary || {};
   const counts = getResultCounts(report);
+  const totalChecks = summary.total_checks ?? getChecks(report).length;
   const items = [
-    ["Overall", report.overall_result || "-"],
-    ["Events", summary.total_events ?? (report.events || []).length],
-    ["QA Checks", summary.total_checks ?? (report.qa_checks || []).length],
-    ["PASS", counts.PASS],
-    ["FAIL", counts.FAIL],
-    ["UNCERTAIN", counts.UNCERTAIN],
-    ["NEED_REVIEW", counts.NEED_REVIEW]
+    ["PASS", `${counts.PASS} / ${totalChecks}`],
+    ["FAIL", `${counts.FAIL} / ${totalChecks}`],
+    ["UNCERTAIN", `${counts.UNCERTAIN} / ${totalChecks}`],
+    ["NEED_REVIEW", `${counts.NEED_REVIEW} / ${totalChecks}`]
   ];
 
   return `
     <section class="final-report__section">
       <div class="section-heading">
-        <h4>Summary</h4>
-        <span>${esc(report.game || "Unknown game")} · ${esc(report.generated_at || "-")}</span>
+        <h4>요약</h4>
+        <span>${esc(report.package_type || report.game || "QA package")} · schema ${esc(report.schema_version || "-")}</span>
       </div>
       <div class="summary-grid">
         ${items.map(([label, value]) => `
@@ -77,8 +109,7 @@ function renderSummary(report) {
 }
 
 function renderQaReport(report, state) {
-  const checks = Array.isArray(report.qa_checks) ? report.qa_checks : [];
-  const events = Array.isArray(report.events) ? report.events : [];
+  const checks = getChecks(report);
   const filteredChecks = state.filter === "ALL"
     ? checks
     : checks.filter((check) => check.result === state.filter);
@@ -88,7 +119,7 @@ function renderQaReport(report, state) {
   const startIndex = (state.page - 1) * state.pageSize;
   const pageItems = filteredChecks.slice(startIndex, startIndex + state.pageSize);
 
-  const filterButtons = QA_FILTERS.map((filter) => `
+  const filterButtons = REVIEW_FILTERS.map((filter) => `
     <button
       class="filter-chip${state.filter === filter ? " is-active" : ""}"
       type="button"
@@ -100,7 +131,7 @@ function renderQaReport(report, state) {
     ${renderSummary(report)}
     <section class="final-report__section">
       <div class="section-heading">
-        <h4>QA Checks</h4>
+        <h4>검토 필요 이벤트</h4>
         <span>${esc(filteredChecks.length)} of ${esc(checks.length)} items</span>
       </div>
       <div class="report-toolbar">
@@ -130,16 +161,10 @@ function renderQaReport(report, state) {
                     <span class="result-badge result-badge--${resultClass(check.result)}">${esc(check.result)}</span>
                   </div>
                   <div class="qa-check-card__meta">
-                    <span>${esc(check.video_id)}</span>
-                    <span>${esc(check.severity || "-")}</span>
-                    <span>confidence ${fmtNumber(check.confidence)}</span>
+                    <span>이벤트 시각: ${fmtNumber(check.focus_time_sec)}s</span>
+                    <span>파일: ${esc(check.video_name || check.video_id || "-")}</span>
                   </div>
-                  <p>${esc(check.reason || check.rule?.description || "-")}</p>
-                  ${(check.notes || []).length ? `
-                    <div class="note-list">
-                      ${check.notes.map((note) => `<span>${esc(note)}</span>`).join("")}
-                    </div>
-                  ` : ""}
+                  <p>메세지: "${esc(check.reason || check.final_decision_reason || "-")}"</p>
                 </div>
                 ${canExpand ? `
                   <button class="secondary-button qa-detail-button" type="button" data-check-detail="${esc(check.check_id)}">
@@ -147,7 +172,7 @@ function renderQaReport(report, state) {
                   </button>
                 ` : ""}
               </div>
-              ${state.openCheckId === check.check_id ? renderCheckDetail(check, events) : ""}
+              ${state.openCheckId === check.check_id ? renderCheckDetail(check) : ""}
             </article>
           `;
         }).join("") : `
@@ -168,47 +193,58 @@ function renderQaReport(report, state) {
   `;
 }
 
-function renderCheckDetail(check, events) {
-  const relatedEvents = events.filter((event) => event.video_id === check.video_id);
+function renderCheckDetail(check) {
+  const conditions = Array.isArray(check.conditions) ? check.conditions : [];
+  const artifacts = Array.isArray(check.artifacts) ? check.artifacts : [];
 
   return `
     <div class="qa-detail">
       <div>
-        <h5>PASS가 아닌 근거</h5>
-        <p>${esc(check.reason || "-")}</p>
+        <h5>Conditions</h5>
+        ${conditions.length ? `
+          <div class="condition-list">
+            ${conditions.map((condition) => `
+              <div class="condition-item">
+                <div class="condition-item__top">
+                  <strong>${esc(condition.condition || condition.condition_id || "-")}</strong>
+                  <span>${esc(condition.result || "-")}</span>
+                </div>
+                <dl>
+                  <div><dt>expected</dt><dd>${esc(condition.expected)}</dd></div>
+                  <div class="${condition.expected !== condition.observed ? "condition-item__mismatch" : ""}"><dt>observed</dt><dd>${esc(condition.observed)}</dd></div>
+                  <div><dt>confidence</dt><dd>${esc(fmtNumber(condition.confidence))}</dd></div>
+                </dl>
+              </div>
+            `).join("")}
+          </div>
+        ` : `<p>표시할 condition이 없습니다.</p>`}
       </div>
       <div>
-        <h5>동일 video_id 이벤트 (${esc(check.video_id)})</h5>
-        <div class="event-table-wrap">
-          <table class="event-table">
-            <thead>
-              <tr>
-                <th>event_id</th>
-                <th>time_range_sec</th>
-                <th>confidence</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${relatedEvents.length ? relatedEvents.map((event) => `
-                <tr>
-                  <td>${esc(event.event_id)}</td>
-                  <td>${esc(fmtTimeRange(event.time_range_sec))}</td>
-                  <td>${esc(fmtNumber(event.confidence))}</td>
-                </tr>
-              `).join("") : `
-                <tr>
-                  <td colspan="3">동일한 video_id의 이벤트가 없습니다.</td>
-                </tr>
-              `}
-            </tbody>
-          </table>
-        </div>
+        <h5>Artifacts</h5>
+        ${artifacts.length ? `
+          <div class="artifact-list">
+            ${artifacts.map((artifact) => `
+              <div class="artifact-item">
+                <div>
+                  <strong>${esc(artifact.kind || artifact.type || "artifact")}</strong>
+                  <span>${esc(artifact.type || "-")}</span>
+                  <p>${esc(artifact.path || "-")}</p>
+                </div>
+                ${artifact.path ? `
+                  <button class="secondary-button artifact-link" type="button" data-artifact-path="${esc(artifact.path)}">
+                    열기
+                  </button>
+                ` : ""}
+              </div>
+            `).join("")}
+          </div>
+        ` : `<p>표시할 artifact가 없습니다.</p>`}
       </div>
     </div>
   `;
 }
 
-function mountFinalReport(reportArea, report) {
+function mountFinalReport(reportArea, report, resultDir) {
   const mountId = (reportArea.__finalReportMountId || 0) + 1;
   reportArea.__finalReportMountId = mountId;
   const state = {
@@ -252,6 +288,12 @@ function mountFinalReport(reportArea, report) {
       const nextId = detailButton.dataset.checkDetail;
       state.openCheckId = state.openCheckId === nextId ? null : nextId;
       render();
+      return;
+    }
+
+    const artifactButton = event.target.closest("[data-artifact-path]");
+    if (artifactButton && bridge.openAnalysisArtifact) {
+      bridge.openAnalysisArtifact(resultDir, artifactButton.dataset.artifactPath);
     }
   });
 
@@ -276,6 +318,7 @@ function initDashboardPage() {
   const folderPickerBtn = qs("[data-folder-picker]");
   const progress        = qs("[data-progress]");
   const reportArea      = qs("[data-report-area]");
+  const reportPanel     = qs("[data-report-panel]");
   const analyzeButton   = qs("[data-start-analysis]");
   let isAnalyzing = false;
 
@@ -292,6 +335,8 @@ function initDashboardPage() {
     analyzeButton.textContent = "분석 중";
     setText("[data-status-text]", "영상 분석 시작");
     progress.style.setProperty("--progress", "30%");
+    if (reportPanel) reportPanel.hidden = true;
+    resetResultMetrics();
 
     if (bridge.onAnalysisComplete) {
       bridge.onAnalysisComplete((result) => {
@@ -300,6 +345,7 @@ function initDashboardPage() {
         analyzeButton.disabled = false;
         analyzeButton.textContent = "분석 시작";
         isAnalyzing = false;
+        if (reportPanel) reportPanel.hidden = false;
 
         const el = document.createElement("div");
         el.className = "report-item";
@@ -323,14 +369,16 @@ function initDashboardPage() {
         const reportDetail = document.createElement("div");
         reportArea.appendChild(reportDetail);
 
-        if (bridge.readFinalReport && result.resultDir) {
-          bridge.readFinalReport(result.resultDir).then((report) => {
-            mountFinalReport(reportDetail, report);
+        if (bridge.readPackageManifest && result.resultDir) {
+          bridge.readPackageManifest(result.resultDir).then((report) => {
+            renderResultMetrics(report);
+            mountFinalReport(reportDetail, report, result.resultDir);
           }).catch((err) => {
+            setText("[data-metric-report]", "오류");
             reportDetail.innerHTML = `
               <div class="empty-state">
                 <div>
-                  <strong>final_report.json을 읽지 못했습니다.</strong>
+                  <strong>package_manifest.json을 읽지 못했습니다.</strong>
                   <span>${esc(err.message || err)}</span>
                 </div>
               </div>

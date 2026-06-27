@@ -191,6 +191,10 @@ select {
   min-width: 0;
 }
 
+.report-row {
+  margin-top: 20px;
+}
+
 .panel {
   min-width: 0;
   border: 1px solid var(--line);
@@ -394,6 +398,14 @@ select.control {
   font-size: 26px;
   font-weight: 850;
   line-height: 1;
+}
+
+.metric__value--pass {
+  color: var(--ok);
+}
+
+.metric__value--fail {
+  color: var(--accent);
 }
 
 .activity-list,
@@ -732,6 +744,106 @@ select.control {
   line-height: 1.55;
 }
 
+.condition-list,
+.artifact-list {
+  display: grid;
+  gap: 9px;
+}
+
+.condition-item,
+.artifact-item {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.condition-item__top,
+.artifact-item {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.condition-item__top strong,
+.artifact-item strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.condition-item__top span,
+.artifact-item span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  color: var(--primary-dark);
+  background: rgba(31, 122, 140, 0.1);
+  font-size: 11px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.condition-item dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0 0;
+}
+
+.condition-item dl div {
+  min-width: 0;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+}
+
+.condition-item dl div.condition-item__mismatch {
+  background: var(--accent-soft);
+}
+
+.condition-item dl div.condition-item__mismatch dd {
+  color: var(--accent);
+  font-weight: 850;
+}
+
+.condition-item dt {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.condition-item dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.artifact-item {
+  align-items: center;
+}
+
+.artifact-item > div {
+  min-width: 0;
+}
+
+.artifact-item p {
+  margin-top: 7px;
+  font-family: ui-monospace, "SFMono-Regular", monospace;
+  overflow-wrap: anywhere;
+}
+
+.artifact-link {
+  flex-shrink: 0;
+  min-width: 64px;
+}
+
 .event-table-wrap {
   overflow-x: auto;
   border: 1px solid var(--line);
@@ -843,8 +955,15 @@ select.control {
   }
 
   .summary-grid,
-  .qa-check-card__main {
+  .qa-check-card__main,
+  .condition-item dl {
     grid-template-columns: 1fr;
+  }
+
+  .condition-item__top,
+  .artifact-item {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .pagination-bar {

@@ -5,5 +5,6 @@ contextBridge.exposeInMainWorld("LovebugBridge", {
   analyzeVideos: (payload) => ipcRenderer.invoke("analyze-videos", payload),
   onAnalysisComplete: (cb) => ipcRenderer.on("analysis-complete", (_, data) => cb(data)),
   openAnalysisResultFolder: (folderPath) => ipcRenderer.invoke("open-analysis-result-folder", folderPath),
-  readFinalReport: (resultDir) => ipcRenderer.invoke("read-final-report", resultDir)
+  openAnalysisArtifact: (resultDir, artifactPath) => ipcRenderer.invoke("open-analysis-artifact", resultDir, artifactPath),
+  readPackageManifest: (resultDir) => ipcRenderer.invoke("read-package-manifest", resultDir)
 });

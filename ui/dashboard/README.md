@@ -56,9 +56,10 @@ result_dir = "/path/to/results/run_20260627_143012"
 
 # result_dir 구조 (Python이 직접 생성)
 # result_dir/
-#   final_report.json
-#   final_report.md
-#   raw/
+#   package_manifest.json
+#   assets/
+#   data/
+#   reports/
 
 print(json.dumps({"resultDir": result_dir}))
 sys.exit(0)
@@ -76,5 +77,5 @@ npx electron . --mock
 ```
 
 `--mock` 플래그가 있으면 `main.js`의 `analyzeVideosMock()`이 호출됩니다.
-1.5초 후 `{ resultDir: "ui/mock/results" }`를 IPC로 전송하며, 실제와 동일한 경로를 탑니다.
+1.5초 후 `{ resultDir: "ui/mock/results" }`를 IPC로 전송하며, `package_manifest.json`을 읽는 실제와 동일한 경로를 탑니다.
 `dashboard.js`와 `index.html`은 mock/real 여부를 전혀 알지 못합니다.
