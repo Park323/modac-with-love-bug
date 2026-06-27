@@ -94,7 +94,8 @@ def _wait_terminal(ctrl, timeout=5.0):
 
 def test_normal_completion(monkeypatch):
     cap, play, ana, log = FakeCapture(), RecordingPlay(), FakeAnalysis(3), FakeLogger()
-    ctrl = AutoRunController(cap, ana, play, Clock(), logger=log, fps=1000.0)
+    ctrl = AutoRunController(cap, ana, play, Clock(), logger=log, fps=1000.0,
+                             countdown_sec=0)
     ctrl.start([{"idx": 0, "x": 1, "y": 1, "rot": 0}])
     _wait_terminal(ctrl)
     st = ctrl.status()
@@ -108,7 +109,7 @@ def test_normal_completion(monkeypatch):
 
 def test_stop_sets_stopped():
     cap, play, ana = FakeCapture(), RecordingPlay(), FakeAnalysis(finish_after=10**9)
-    ctrl = AutoRunController(cap, ana, play, Clock(), fps=1000.0)
+    ctrl = AutoRunController(cap, ana, play, Clock(), fps=1000.0, countdown_sec=0)
     ctrl.start([{"idx": 0, "x": 1, "y": 1, "rot": 0}])
     time.sleep(0.05)
     ctrl.stop()
@@ -120,7 +121,7 @@ def test_stop_sets_stopped():
 def test_begin_failure_sets_error():
     cap = FakeCapture(raise_on_begin=True)
     play, ana = RecordingPlay(), FakeAnalysis(3)
-    ctrl = AutoRunController(cap, ana, play, Clock(), fps=1000.0)
+    ctrl = AutoRunController(cap, ana, play, Clock(), fps=1000.0, countdown_sec=0)
     ctrl.start([{"idx": 0, "x": 1, "y": 1, "rot": 0}])
     _wait_terminal(ctrl)
     st = ctrl.status()
@@ -133,7 +134,7 @@ def test_begin_failure_sets_error():
 def test_tick_exception_is_resilient():
     cap, play = FakeCapture(), RecordingPlay()
     ana = FakeAnalysis(finish_after=2, raise_times=2)  # 처음 2틱 예외, 이후 정상
-    ctrl = AutoRunController(cap, ana, play, Clock(), fps=1000.0)
+    ctrl = AutoRunController(cap, ana, play, Clock(), fps=1000.0, countdown_sec=0)
     ctrl.start([{"idx": 0, "x": 1, "y": 1, "rot": 0}])
     _wait_terminal(ctrl)
     st = ctrl.status()
@@ -146,7 +147,7 @@ def test_consecutive_error_cap():
     cap = FakeCapture(raise_on_next=True)
     play, ana = RecordingPlay(), FakeAnalysis(10**9)
     ctrl = AutoRunController(cap, ana, play, Clock(), fps=1000.0,
-                             max_consecutive_errors=5)
+                             max_consecutive_errors=5, countdown_sec=0)
     ctrl.start([{"idx": 0, "x": 1, "y": 1, "rot": 0}])
     _wait_terminal(ctrl)
     st = ctrl.status()
@@ -170,7 +171,8 @@ def test_logger_start_failure_is_nonfatal():
     """A logger whose start() raises must not abort the capture→analyze→play loop."""
     cap, play, ana = FakeCapture(), RecordingPlay(), FakeAnalysis(finish_after=3)
     failing_log = FailingLogger()
-    ctrl = AutoRunController(cap, ana, play, Clock(), logger=failing_log, fps=1000.0)
+    ctrl = AutoRunController(cap, ana, play, Clock(), logger=failing_log, fps=1000.0,
+                             countdown_sec=0)
     ctrl.start([{"idx": 0, "x": 1, "y": 1, "rot": 0}])
     _wait_terminal(ctrl)
     st = ctrl.status()
@@ -183,7 +185,7 @@ def test_logger_start_failure_is_nonfatal():
 
 def test_double_start_raises():
     cap, play, ana = FakeCapture(), RecordingPlay(), FakeAnalysis(finish_after=10**9)
-    ctrl = AutoRunController(cap, ana, play, Clock(), fps=1000.0)
+    ctrl = AutoRunController(cap, ana, play, Clock(), fps=1000.0, countdown_sec=0)
     ctrl.start([{"idx": 0, "x": 1, "y": 1, "rot": 0}])
     try:
         with pytest.raises(RuntimeError):
@@ -191,3 +193,32 @@ def test_double_start_raises():
     finally:
         ctrl.stop()
         _wait_terminal(ctrl)
+
+
+def test_stop_during_countdown_aborts_before_begin():
+    cap, play, ana = FakeCapture(), RecordingPlay(), FakeAnalysis(finish_after=10**9)
+    ctrl = AutoRunController(cap, ana, play, Clock(), fps=1000.0, countdown_sec=5.0)
+    ctrl.start([{"idx": 0, "x": 1, "y": 1, "rot": 0}])
+    ctrl.stop()                      # 카운트다운 도중 즉시 중단
+    _wait_terminal(ctrl)
+    st = ctrl.status()
+    assert st["state"] == "stopped"
+    assert play.began == 0           # begin 진입 안 함
+    assert cap.began == 0
+
+
+def test_countdown_delays_and_beeps():
+    cap, play, ana = FakeCapture(), RecordingPlay(), FakeAnalysis(finish_after=1)
+    beeps = []
+    ctrl = AutoRunController(cap, ana, play, Clock(), fps=1000.0,
+                             countdown_sec=2.0, beep_at_sec=3.0,
+                             beeper=lambda hz, ms: beeps.append((hz, ms)))
+    import time
+    t0 = time.perf_counter()
+    ctrl.start([{"idx": 0, "x": 1, "y": 1, "rot": 0}])
+    _wait_terminal(ctrl, timeout=6.0)
+    elapsed = time.perf_counter() - t0
+    assert ctrl.status()["state"] == "done"
+    assert elapsed >= 1.8            # 카운트다운 대기 반영
+    assert len(beeps) >= 1           # 마지막 구간 부저
+    assert play.began == 1           # 카운트다운 후 정상 시작

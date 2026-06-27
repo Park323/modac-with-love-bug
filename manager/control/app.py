@@ -54,7 +54,7 @@ def reset_autorun() -> None:
     global autorun
     autorun = AutoRunController(
         StubCaptureModule(), AutoRunAnalysis(), StubPlayModule(), Clock(),
-        logger=None)
+        logger=None, countdown_sec=0.0)
 
 
 class StartRequest(BaseModel):
