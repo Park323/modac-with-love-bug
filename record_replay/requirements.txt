@@ -4,3 +4,4 @@ mss
 opencv-python
 numpy
 anthropic
+ultralytics
