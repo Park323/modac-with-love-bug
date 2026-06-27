@@ -19,6 +19,13 @@ window.MapSelector = (function () {
     return ((Math.atan2(dx, -dy) * 180) / Math.PI + 360) % 360;
   }
 
+  function rotBetween(from, to, fallback) {
+    if (!from || !to) return fallback;
+    const dx = to.x - from.x, dy = to.y - from.y;
+    if (Math.hypot(dx, dy) < 0.1) return fallback;
+    return ((Math.atan2(dx, -dy) * 180) / Math.PI + 360) % 360;
+  }
+
   // ── 그리기 ──
   function drawPolygon(pts, fill, stroke, lw) {
     if (!pts.length) return;
@@ -91,6 +98,28 @@ window.MapSelector = (function () {
   // ── 패널 ──
   function scenario() {
     return window.MapGeometry.buildScenario(waypoints);
+  }
+
+  function setWaypoints(nextWaypoints) {
+    const sorted = [...nextWaypoints].sort((a, b) => Number(a.idx || 0) - Number(b.idx || 0));
+    waypoints = sorted.map((wp) => ({
+      x: Number(wp.x),
+      y: Number(wp.y),
+      rot: Number.isFinite(Number(wp.rot)) ? Number(wp.rot) : 90,
+    })).filter((wp) => Number.isFinite(wp.x) && Number.isFinite(wp.y));
+
+    let lastRot = 90;
+    waypoints = waypoints.map((wp, i) => {
+      const explicitRot = Number(sorted[i] && sorted[i].rot);
+      const rot = Number.isFinite(explicitRot) ? explicitRot : rotBetween(wp, waypoints[i + 1], lastRot);
+      lastRot = rot;
+      return { ...wp, rot };
+    });
+
+    pending = null;
+    dragging = false;
+    redraw();
+    updatePanel();
   }
 
   function updatePanel() {
@@ -216,6 +245,59 @@ window.MapSelector = (function () {
       waypoints = []; pending = null; dragging = false;
       redraw(); updatePanel(); setCoord("—", false);
     });
+
+    const scenarioForm = document.querySelector("[data-scenario-submit-form]");
+    const scenarioInput = document.querySelector("[data-scenario-text]");
+    const scenarioSubmit = document.querySelector("[data-scenario-submit]");
+    if (scenarioForm && scenarioInput && scenarioSubmit) {
+      console.log("[scenario] submit controls ready");
+
+      async function submitScenario() {
+        const text = scenarioInput.value.trim();
+        console.log("[scenario] submit requested", { text });
+        if (!text) {
+          setCoord("시나리오를 입력하세요", true);
+          scenarioInput.focus();
+          return;
+        }
+
+        scenarioSubmit.disabled = true;
+        setCoord("시나리오 변환 중…", false);
+        try {
+          console.log("[scenario] calling /scenario/waypoints");
+          const res = await window.ManagerApi.scenarioWaypoints(text);
+          console.log("[scenario] /scenario/waypoints response", res);
+          if (!res.ok) {
+            setCoord("변환 실패: " + (res.data.detail || res.status), true);
+            return;
+          }
+          setWaypoints(res.data.waypoints || []);
+          setCoord("시나리오 변환 완료 — " + waypoints.length + "개 waypoint", false);
+        } catch (err) {
+          console.error("[scenario] conversion failed", err);
+          setCoord("변환 실패: " + err, true);
+        } finally {
+          scenarioSubmit.disabled = false;
+        }
+      }
+
+      scenarioForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        submitScenario();
+      });
+
+      scenarioInput.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        submitScenario();
+      });
+
+      scenarioSubmit.addEventListener("click", (e) => {
+        e.preventDefault();
+        submitScenario();
+      });
+    }
+
     listEl.addEventListener("click", (e) => {
       const btn = e.target.closest("[data-remove]");
       if (!btn) return;
@@ -259,5 +341,5 @@ window.MapSelector = (function () {
     });
   }
 
-  return { init, scenario };
+  return { init, scenario, setWaypoints };
 })();

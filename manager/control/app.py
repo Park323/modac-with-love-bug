@@ -19,6 +19,7 @@ from manager.recorder_session import RecordSession, RecorderStartError
 from manager.autorun_controller import AutoRunController
 from manager.analysis_autorun import AutoRunAnalysis
 from manager.capture_stub import StubCaptureModule
+from record_replay.src.scenario_to_waypoints import scenario_to_waypoints
 
 _UI_DIR = Path(__file__).resolve().parents[2] / "ui"
 _MOCK_RESULTS_DIR = _UI_DIR / "mock" / "results"
@@ -74,6 +75,10 @@ class AutoStartRequest(BaseModel):
     waypoints: list[dict]
 
 
+class ScenarioWaypointsRequest(BaseModel):
+    scenario: str
+
+
 class DashboardAnalyzeRequest(BaseModel):
     project: str | None = None
     videoDirectory: str | None = None
@@ -97,6 +102,25 @@ def _safe_result_path(result_dir: str, child_path: str = "") -> Path:
 @app.post("/scenario/browse")
 def scenario_browse():
     return {"path": pick_json_file()}
+
+
+@app.post("/scenario/waypoints")
+def scenario_waypoints(req: ScenarioWaypointsRequest):
+    scenario = req.scenario.strip()
+    print(f"[scenario/waypoints] request: {scenario!r}", flush=True)
+    if not scenario:
+        print("[scenario/waypoints] rejected: empty scenario", flush=True)
+        raise HTTPException(status_code=400, detail="scenario required")
+    try:
+        waypoints = scenario_to_waypoints(scenario)
+        print(f"[scenario/waypoints] response: {len(waypoints)} waypoint(s)", flush=True)
+    except RuntimeError as e:
+        print(f"[scenario/waypoints] runtime error: {e}", flush=True)
+        raise HTTPException(status_code=503, detail=str(e))
+    except (OSError, ValueError, KeyError, json.JSONDecodeError) as e:
+        print(f"[scenario/waypoints] bad request error: {e}", flush=True)
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"waypoints": waypoints}
 
 
 @app.post("/record/start")

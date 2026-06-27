@@ -10,6 +10,7 @@ window.ManagerApi = (() => {
 
   return {
     browse: () => post("/scenario/browse"),
+    scenarioWaypoints: (scenario) => post("/scenario/waypoints", { scenario }),
     start: (path, repeat) => post("/run/start", { path, repeat }),
     stop: () => post("/run/stop"),
     status: async () => {
