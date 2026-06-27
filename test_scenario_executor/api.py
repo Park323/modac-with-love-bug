@@ -30,7 +30,7 @@ _input_thread: threading.Thread | None = None
 _input_start_error: BaseException | None = None
 _input_lock = threading.Lock()
 
-_screen_recorder = ScreenRecorder(output_root=OUTPUT_ROOT, fps=30.0)
+_screen_recorder = ScreenRecorder(output_root=OUTPUT_ROOT)
 _screen_thread: threading.Thread | None = None
 _screen_lock = threading.Lock()
 
@@ -55,7 +55,9 @@ class SessionRequest(BaseModel):
 
 class ScreenStartRequest(BaseModel):
     session_id: str = "session"
-    fps: float = 30.0
+    screenshot_fps: float | None = None
+    video_fps: float | None = None
+    fps: float | None = None
     screenshot_callback_url: str | None = None
 
 
@@ -63,7 +65,9 @@ class TestStartRequest(BaseModel):
     session_id: str = "session"
     backend: Literal["hook", "polling"] = "hook"
     sample_hz: float = 120.0
-    fps: float = 30.0
+    screenshot_fps: float | None = None
+    video_fps: float | None = None
+    fps: float | None = None
     screenshot_callback_url: str | None = None
 
 
@@ -134,21 +138,38 @@ def _manifest_screen_summary(screen_result: dict[str, Any]) -> dict[str, Any]:
     summary = screen_result.get("summary")
     if isinstance(summary, dict):
         return {
-            "fps": summary.get("fps"),
+            "screenshot_fps": summary.get("screenshot_fps"),
+            "video_fps": summary.get("video_fps"),
             "started_at": summary.get("started_at"),
             "stopped_at": summary.get("stopped_at"),
             "duration_sec": summary.get("duration_sec"),
-            "frame_count": summary.get("frame_count"),
+            "screenshot_count": summary.get("screenshot_count"),
+            "video_frame_count": summary.get("video_frame_count"),
             "screenshot_callback_url": summary.get("screenshot_callback_url"),
         }
     return {
-        "fps": screen_result.get("fps"),
+        "screenshot_fps": screen_result.get("screenshot_fps"),
+        "video_fps": screen_result.get("video_fps"),
         "started_at": screen_result.get("started_at"),
         "stopped_at": screen_result.get("stopped_at"),
         "duration_sec": screen_result.get("duration_sec"),
-        "frame_count": screen_result.get("frame_count"),
+        "screenshot_count": screen_result.get("screenshot_count"),
+        "video_frame_count": screen_result.get("video_frame_count"),
         "screenshot_callback_url": screen_result.get("screenshot_callback_url"),
     }
+
+
+def _screen_fps(config: ScreenStartRequest | TestStartRequest) -> tuple[float, float]:
+    fallback_fps = config.fps if config.fps is not None else 30.0
+    screenshot_fps = (
+        config.screenshot_fps if config.screenshot_fps is not None else fallback_fps
+    )
+    video_fps = config.video_fps if config.video_fps is not None else fallback_fps
+    if screenshot_fps <= 0:
+        raise HTTPException(400, "screenshot_fps must be greater than 0")
+    if video_fps <= 0:
+        raise HTTPException(400, "video_fps must be greater than 0")
+    return screenshot_fps, video_fps
 
 
 def _start_input_recording(config: InputRecordStart) -> dict[str, Any]:
@@ -214,12 +235,14 @@ def _stop_input_recording(session_id: str) -> dict[str, Any]:
 def _start_screen_recording(config: ScreenStartRequest) -> dict[str, Any]:
     global _screen_recorder, _screen_thread
     session_dir, started_at = _ensure_session(config.session_id)
+    screenshot_fps, video_fps = _screen_fps(config)
     with _screen_lock:
         if _screen_recorder.is_recording:
             raise HTTPException(400, "Screen recorder is already recording")
         _screen_recorder = ScreenRecorder(
             output_root=OUTPUT_ROOT,
-            fps=config.fps,
+            screenshot_fps=screenshot_fps,
+            video_fps=video_fps,
             screenshot_callback_url=config.screenshot_callback_url,
         )
         locations = _screen_recorder.prepare(
@@ -236,7 +259,8 @@ def _start_screen_recording(config: ScreenStartRequest) -> dict[str, Any]:
     return {
         "status": "recording",
         "session_id": config.session_id,
-        "fps": config.fps,
+        "screenshot_fps": screenshot_fps,
+        "video_fps": video_fps,
         "session_dir": str(session_dir),
         "test_started_at": started_at,
         "locations": locations,
@@ -267,6 +291,8 @@ def test_start(config: TestStartRequest) -> dict[str, Any]:
         screen_result = _start_screen_recording(
             ScreenStartRequest(
                 session_id=config.session_id,
+                screenshot_fps=config.screenshot_fps,
+                video_fps=config.video_fps,
                 fps=config.fps,
                 screenshot_callback_url=config.screenshot_callback_url,
             )

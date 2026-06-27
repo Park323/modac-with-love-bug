@@ -86,21 +86,36 @@ def _manifest_screen_summary(screen_result: dict[str, Any]) -> dict[str, Any]:
     summary = screen_result.get("summary")
     if isinstance(summary, dict):
         return {
-            "fps": summary.get("fps"),
+            "screenshot_fps": summary.get("screenshot_fps"),
+            "video_fps": summary.get("video_fps"),
             "started_at": summary.get("started_at"),
             "stopped_at": summary.get("stopped_at"),
             "duration_sec": summary.get("duration_sec"),
-            "frame_count": summary.get("frame_count"),
+            "screenshot_count": summary.get("screenshot_count"),
+            "video_frame_count": summary.get("video_frame_count"),
             "screenshot_callback_url": summary.get("screenshot_callback_url"),
         }
     return {
-        "fps": screen_result.get("fps"),
+        "screenshot_fps": screen_result.get("screenshot_fps"),
+        "video_fps": screen_result.get("video_fps"),
         "started_at": screen_result.get("started_at"),
         "stopped_at": screen_result.get("stopped_at"),
         "duration_sec": screen_result.get("duration_sec"),
-        "frame_count": screen_result.get("frame_count"),
+        "screenshot_count": screen_result.get("screenshot_count"),
+        "video_frame_count": screen_result.get("video_frame_count"),
         "screenshot_callback_url": screen_result.get("screenshot_callback_url"),
     }
+
+
+def _effective_screen_fps(args: argparse.Namespace) -> tuple[float, float]:
+    fallback_fps = args.fps if args.fps is not None else 30.0
+    screenshot_fps = args.screenshot_fps if args.screenshot_fps is not None else fallback_fps
+    video_fps = args.video_fps if args.video_fps is not None else fallback_fps
+    if screenshot_fps <= 0:
+        raise ValueError("--screenshot-fps must be greater than 0")
+    if video_fps <= 0:
+        raise ValueError("--video-fps must be greater than 0")
+    return screenshot_fps, video_fps
 
 
 def _start_thread(target: Callable[[], None]) -> tuple[threading.Thread, ThreadResult]:
@@ -174,20 +189,26 @@ def _start_screen(
     session_id: str,
     session_dir: Path,
     started_at: str,
-    fps: float,
+    screenshot_fps: float,
+    video_fps: float,
     screenshot_callback_url: str | None,
 ) -> tuple[Any, threading.Thread, ThreadResult, dict[str, str | None]]:
     from .screen.recorder import ScreenRecorder
 
     recorder = ScreenRecorder(
         output_root=OUTPUT_ROOT,
-        fps=fps,
+        screenshot_fps=screenshot_fps,
+        video_fps=video_fps,
         screenshot_callback_url=screenshot_callback_url,
     )
     locations = recorder.prepare(session_id, session_dir=session_dir, test_started_at=started_at)
     thread, result = _start_thread(lambda: recorder.start(session_id))
     _wait_started("screen recorder", thread, result, lambda: recorder.is_recording)
-    print(f"[screen] started: fps={fps}, video_path={locations.get('video_path')}")
+    print(
+        "[screen] started: "
+        f"screenshot_fps={screenshot_fps}, video_fps={video_fps}, "
+        f"video_path={locations.get('video_path')}"
+    )
     return recorder, thread, result, locations
 
 
@@ -213,12 +234,18 @@ def run_test_session(args: argparse.Namespace) -> None:
     screen_result: ThreadResult | None = None
 
     session_dir, started_at, paths = _new_session(args.session_id)
+    screenshot_fps, video_fps = _effective_screen_fps(args)
     try:
         input_recorder, input_thread, input_result = _start_input(
             args.session_id, paths["input_path"], args.backend, args.sample_hz
         )
         screen_recorder, screen_thread, screen_result, locations = _start_screen(
-            args.session_id, session_dir, started_at, args.fps, args.screenshot_callback_url
+            args.session_id,
+            session_dir,
+            started_at,
+            screenshot_fps,
+            video_fps,
+            args.screenshot_callback_url,
         )
         print(f"[test] running for {args.duration_sec}s")
         time.sleep(args.duration_sec)
@@ -260,8 +287,14 @@ def run_input_record(args: argparse.Namespace) -> None:
 
 def run_screen_record(args: argparse.Namespace) -> None:
     session_dir, started_at, _paths = _new_session(args.session_id)
+    screenshot_fps, video_fps = _effective_screen_fps(args)
     recorder, thread, result, _locations = _start_screen(
-        args.session_id, session_dir, started_at, args.fps, args.screenshot_callback_url
+        args.session_id,
+        session_dir,
+        started_at,
+        screenshot_fps,
+        video_fps,
+        args.screenshot_callback_url,
     )
     print(f"[screen] running for {args.duration_sec}s")
     time.sleep(args.duration_sec)
@@ -309,7 +342,9 @@ def parse_args() -> argparse.Namespace:
     _add_common_record_args(test_session)
     test_session.add_argument("--backend", choices=["hook", "polling"], default="polling")
     test_session.add_argument("--sample-hz", type=float, default=120.0)
-    test_session.add_argument("--fps", type=float, default=30.0)
+    test_session.add_argument("--screenshot-fps", type=float)
+    test_session.add_argument("--video-fps", type=float)
+    test_session.add_argument("--fps", type=float, help="legacy shortcut for both FPS values")
     test_session.add_argument("--screenshot-callback-url")
     test_session.set_defaults(func=run_test_session)
 
@@ -327,7 +362,9 @@ def parse_args() -> argparse.Namespace:
         help="run /screen/record/start flow, wait, then run /screen/record/stop flow",
     )
     _add_common_record_args(screen_record)
-    screen_record.add_argument("--fps", type=float, default=30.0)
+    screen_record.add_argument("--screenshot-fps", type=float)
+    screen_record.add_argument("--video-fps", type=float)
+    screen_record.add_argument("--fps", type=float, help="legacy shortcut for both FPS values")
     screen_record.add_argument("--screenshot-callback-url")
     screen_record.set_defaults(func=run_screen_record)
 

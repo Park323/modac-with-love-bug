@@ -5,7 +5,7 @@ Windows에서 키보드/마우스 입력을 기록하고, 화면을 저장하며
 ## 제공 기능
 
 - `input/logger.py`: 실시간 키보드/마우스 입력을 기록하고 JSON으로 저장합니다.
-- `screen/recorder.py`: 기능 시작부터 종료까지 30fps 스크린샷과 MP4 동영상을 저장합니다.
+- `screen/recorder.py`: 기능 시작부터 종료까지 지정한 주기로 스크린샷과 MP4 동영상을 저장합니다.
 - `playback/player.py`: 외부앱에서 받은 JSON array를 키보드/마우스 입력으로 재생합니다.
 - `core/session_paths.py`: 세션별 저장 폴더와 manifest 경로를 관리합니다.
 - `api.py`: 외부앱과 통신하기 위한 FastAPI 엔드포인트를 제공합니다.
@@ -93,7 +93,8 @@ Content-Type: application/json
   "session_id": "tdm_run_001",
   "backend": "hook",
   "sample_hz": 120,
-  "fps": 30,
+  "screenshot_fps": 5,
+  "video_fps": 30,
   "screenshot_callback_url": "http://127.0.0.1:9000/screenshots"
 }
 ```
@@ -112,6 +113,8 @@ Content-Type: application/json
   },
   "screen": {
     "status": "recording",
+    "screenshot_fps": 5,
+    "video_fps": 30,
     "session_dir": "test_scenario_executor_output/tdm_run_001_20260627_120000",
     "test_started_at": "2026-06-27T03:00:00.000000+00:00",
     "locations": {
@@ -187,12 +190,15 @@ POST /input/record/stop
 POST /screen/record/start
 {
   "session_id": "tdm_run_001",
-  "fps": 30,
+  "screenshot_fps": 5,
+  "video_fps": 30,
   "screenshot_callback_url": "http://127.0.0.1:9000/screenshots"
 }
 ```
 
 시작 응답에는 `session_dir`, `screenshots_dir`, `video_path`, `manifest_path`가 포함됩니다. 이 값은 저장 루트 확인용입니다. 개별 스크린샷 파일 경로는 스크린샷이 생성될 때마다 `screenshot_callback_url`로 POST됩니다.
+
+`screenshot_fps`는 PNG 스크린샷 저장 주기, `video_fps`는 MP4 동영상 프레임 저장 주기입니다. 기존 호환을 위해 `fps`만 보내면 두 값을 같은 FPS로 설정합니다.
 
 녹화 종료:
 
@@ -263,7 +269,7 @@ Invoke-RestMethod `
   -Uri "http://127.0.0.1:8765/test/start" `
   -Method Post `
   -ContentType "application/json" `
-  -Body '{"session_id":"local_test_001","backend":"polling","sample_hz":120,"fps":30}'
+  -Body '{"session_id":"local_test_001","backend":"polling","sample_hz":120,"screenshot_fps":5,"video_fps":30}'
 ```
 
 ```powershell
@@ -277,20 +283,20 @@ Invoke-RestMethod `
 cmd:
 
 ```cmd
-curl.exe -X POST http://127.0.0.1:8765/test/start -H "Content-Type: application/json" -d "{\"session_id\":\"local_test_001\",\"backend\":\"polling\",\"sample_hz\":120,\"fps\":30}"
+curl.exe -X POST http://127.0.0.1:8765/test/start -H "Content-Type: application/json" -d "{\"session_id\":\"local_test_001\",\"backend\":\"polling\",\"sample_hz\":120,\"screenshot_fps\":5,\"video_fps\":30}"
 curl.exe -X POST http://127.0.0.1:8765/test/stop -H "Content-Type: application/json" -d "{\"session_id\":\"local_test_001\"}"
 ```
 
 로컬 커맨드:
 
 ```powershell
-python -m test_scenario_executor.local_runner test-session --session-id local_test_001 --backend polling --duration-sec 5 --fps 30
+python -m test_scenario_executor.local_runner test-session --session-id local_test_001 --backend polling --duration-sec 5 --screenshot-fps 5 --video-fps 30
 ```
 
 callback까지 확인하려면 외부앱 역할을 하는 서버를 먼저 띄운 뒤 callback URL을 넘깁니다.
 
 ```powershell
-python -m test_scenario_executor.local_runner test-session --session-id local_test_001 --backend polling --duration-sec 5 --fps 30 --screenshot-callback-url http://127.0.0.1:9000/screenshots
+python -m test_scenario_executor.local_runner test-session --session-id local_test_001 --backend polling --duration-sec 5 --screenshot-fps 5 --video-fps 30 --screenshot-callback-url http://127.0.0.1:9000/screenshots
 ```
 
 ### `POST /input/record/start` + `POST /input/record/stop`
@@ -339,7 +345,7 @@ Invoke-RestMethod `
   -Uri "http://127.0.0.1:8765/screen/record/start" `
   -Method Post `
   -ContentType "application/json" `
-  -Body '{"session_id":"local_screen_001","fps":30}'
+  -Body '{"session_id":"local_screen_001","screenshot_fps":5,"video_fps":30}'
 ```
 
 ```powershell
@@ -351,14 +357,14 @@ Invoke-RestMethod `
 cmd:
 
 ```cmd
-curl.exe -X POST http://127.0.0.1:8765/screen/record/start -H "Content-Type: application/json" -d "{\"session_id\":\"local_screen_001\",\"fps\":30}"
+curl.exe -X POST http://127.0.0.1:8765/screen/record/start -H "Content-Type: application/json" -d "{\"session_id\":\"local_screen_001\",\"screenshot_fps\":5,\"video_fps\":30}"
 curl.exe -X POST http://127.0.0.1:8765/screen/record/stop
 ```
 
 로컬 커맨드:
 
 ```powershell
-python -m test_scenario_executor.local_runner screen-record --session-id local_screen_001 --duration-sec 5 --fps 30
+python -m test_scenario_executor.local_runner screen-record --session-id local_screen_001 --duration-sec 5 --screenshot-fps 5 --video-fps 30
 ```
 
 ### `GET /screen/record/status`

@@ -1,4 +1,4 @@
-"""Capture 30 FPS screenshots and a video file during a session."""
+"""Capture screenshots and a video file during a session."""
 
 from __future__ import annotations
 
@@ -22,18 +22,25 @@ class ScreenRecorder:
     def __init__(
         self,
         output_root: str | Path = "test_scenario_executor_output",
-        fps: float = 30.0,
+        screenshot_fps: float = 30.0,
+        video_fps: float = 30.0,
         screenshot_callback_url: str | None = None,
     ) -> None:
+        if screenshot_fps <= 0:
+            raise ValueError("screenshot_fps must be greater than 0")
+        if video_fps <= 0:
+            raise ValueError("video_fps must be greater than 0")
         self.output_root = Path(output_root)
-        self.fps = fps
+        self.screenshot_fps = screenshot_fps
+        self.video_fps = video_fps
         self.screenshot_callback_url = screenshot_callback_url
         self._running = False
         self._session_dir: Path | None = None
         self._screenshots_dir: Path | None = None
         self._video_path: Path | None = None
         self._manifest_path: Path | None = None
-        self._frame_count = 0
+        self._screenshot_count = 0
+        self._video_frame_count = 0
         self._started_at = 0.0
         self._test_started_at: str | None = None
         self._meta: dict[str, Any] = {}
@@ -80,55 +87,73 @@ class ScreenRecorder:
         assert self._manifest_path is not None
 
         self._running = True
-        self._frame_count = 0
+        self._screenshot_count = 0
+        self._video_frame_count = 0
         self._started_at = time.perf_counter()
         self._meta = {
             "schema_version": "1.0",
             "session_id": session_id,
             "test_started_at": self._test_started_at or utc_now_iso(),
-            "fps": self.fps,
+            "screenshot_fps": self.screenshot_fps,
+            "video_fps": self.video_fps,
             "started_at": datetime.now(timezone.utc).isoformat(),
             "locations": self.locations,
             "screenshot_callback_url": self.screenshot_callback_url,
         }
 
         writer: cv2.VideoWriter | None = None
-        frame_interval = 1.0 / self.fps
-        next_frame_at = time.perf_counter()
+        screenshot_interval = 1.0 / self.screenshot_fps
+        video_interval = 1.0 / self.video_fps
+        next_screenshot_at = time.perf_counter()
+        next_video_at = next_screenshot_at
         self._start_callback_worker()
 
         try:
             with mss.mss() as sct:
                 monitor = sct.monitors[1]
                 while self._running:
+                    now = time.perf_counter()
+                    screenshot_due = now >= next_screenshot_at
+                    video_due = now >= next_video_at
+                    if not screenshot_due and not video_due:
+                        time.sleep(min(next_screenshot_at, next_video_at) - now)
+                        continue
+
                     raw = sct.grab(monitor)
                     frame = cv2.cvtColor(np.array(raw), cv2.COLOR_BGRA2BGR)
                     if writer is None:
                         height, width = frame.shape[:2]
                         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-                        writer = cv2.VideoWriter(str(self._video_path), fourcc, self.fps, (width, height))
+                        writer = cv2.VideoWriter(
+                            str(self._video_path), fourcc, self.video_fps, (width, height)
+                        )
                         if not writer.isOpened():
                             raise RuntimeError(f"Could not open video writer: {self._video_path}")
 
-                    captured_at = datetime.now(timezone.utc)
-                    timestamp = captured_at.strftime("%Y%m%d_%H%M%S_%f")
-                    frame_path = (
-                        self._screenshots_dir
-                        / f"screenshot_{timestamp}_{self._frame_count:06d}.png"
-                    )
-                    cv2.imwrite(str(frame_path), frame)
-                    writer.write(frame)
-                    self._notify_screenshot(
-                        session_id, frame_path, self._frame_count, captured_at
-                    )
-                    self._frame_count += 1
+                    if screenshot_due:
+                        captured_at = datetime.now(timezone.utc)
+                        timestamp = captured_at.strftime("%Y%m%d_%H%M%S_%f")
+                        frame_path = (
+                            self._screenshots_dir
+                            / f"screenshot_{timestamp}_{self._screenshot_count:06d}.png"
+                        )
+                        cv2.imwrite(str(frame_path), frame)
+                        self._notify_screenshot(
+                            session_id, frame_path, self._screenshot_count, captured_at
+                        )
+                        self._screenshot_count += 1
+                        next_screenshot_at += screenshot_interval
 
-                    next_frame_at += frame_interval
-                    sleep_for = next_frame_at - time.perf_counter()
-                    if sleep_for > 0:
-                        time.sleep(sleep_for)
-                    else:
-                        next_frame_at = time.perf_counter()
+                    if video_due:
+                        writer.write(frame)
+                        self._video_frame_count += 1
+                        next_video_at += video_interval
+
+                    now = time.perf_counter()
+                    if next_screenshot_at <= now:
+                        next_screenshot_at = now + screenshot_interval
+                    if next_video_at <= now:
+                        next_video_at = now + video_interval
         finally:
             self._running = False
             if writer is not None:
@@ -145,11 +170,13 @@ class ScreenRecorder:
     def _summary(self) -> dict[str, Any]:
         duration = time.perf_counter() - self._started_at if self._started_at else 0.0
         summary = {
-            "fps": self.fps,
+            "screenshot_fps": self.screenshot_fps,
+            "video_fps": self.video_fps,
             "started_at": self._meta.get("started_at"),
             "stopped_at": datetime.now(timezone.utc).isoformat(),
             "duration_sec": round(duration, 4),
-            "frame_count": self._frame_count,
+            "screenshot_count": self._screenshot_count,
+            "video_frame_count": self._video_frame_count,
             "screenshot_callback_url": self.screenshot_callback_url,
         }
         return summary
