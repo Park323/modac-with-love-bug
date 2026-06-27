@@ -1,10 +1,12 @@
 """
-Hook-free input recorder using GetAsyncKeyState + GetCursorPos polling.
+Hook-free input recorder — polling via GetAsyncKeyState + GetCursorPos.
 
-No pynput, no WH_MOUSE_LL, no WH_KEYBOARD_LL — nothing that anti-cheat
-scans for in other processes. Tradeoff: mouse delta is from GetCursorPos,
-which returns (0, 0) in FPS raw-input mode. Key and mouse-button capture
-is reliable.
+No pynput, no WH_MOUSE_LL, no WH_KEYBOARD_LL.
+Tradeoff: mouse delta from GetCursorPos returns (0,0) in FPS raw-input mode.
+Keyboard and mouse button capture is reliable.
+
+Each key event stores 'scan' and 'extended' fields so the replayer
+can use the scan-code path (see win_input.py).
 """
 
 from __future__ import annotations
@@ -17,12 +19,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .keys import GAME_KEY_VKS, MOUSE_VK_TO_NAME, VK_TO_NAME
+from .keys import (
+    ALL_KEYBOARD_VKS,
+    EXTENDED_VKS,
+    MOUSE_VK_TO_NAME,
+    VK_TO_NAME,
+    scan_code_for_vk,
+)
 
 _user32 = ctypes.windll.user32
 
-STOP_VK   = 0x78  # F9
-START_VK  = 0x77  # F8
 SAMPLE_HZ = 120
 
 
@@ -49,7 +55,7 @@ class PollingRecorder:
     # ── public ──────────────────────────────────────────────────────────────
 
     def start(self) -> None:
-        """Run the polling loop (blocks until stop() is called)."""
+        """Run polling loop (blocks until stop() is called)."""
         self.events = []
         self._prev_keys = {}
         self._prev_buttons = {}
@@ -100,24 +106,39 @@ class PollingRecorder:
         return round(time.perf_counter() - self._t0, 4)
 
     def _poll_keys(self) -> None:
-        for vk in GAME_KEY_VKS:
+        t = self._elapsed()
+        for vk in ALL_KEYBOARD_VKS:
             pressed = _is_pressed(vk)
             was = self._prev_keys.get(vk, False)
-            if pressed and not was:
-                self.events.append({"t": self._elapsed(), "type": "key_down", "key": VK_TO_NAME[vk]})
-            elif was and not pressed:
-                self.events.append({"t": self._elapsed(), "type": "key_up", "key": VK_TO_NAME[vk]})
+            if pressed == was:
+                continue
+
             self._prev_keys[vk] = pressed
+            scan = scan_code_for_vk(vk)
+            if scan == 0:
+                continue
+
+            self.events.append({
+                "t":        t,
+                "type":     "key_down" if pressed else "key_up",
+                "key":      VK_TO_NAME.get(vk, f"0x{vk:02X}"),
+                "scan":     scan,
+                "extended": vk in EXTENDED_VKS,
+            })
 
     def _poll_mouse_buttons(self) -> None:
+        t = self._elapsed()
         for vk, name in MOUSE_VK_TO_NAME.items():
             pressed = _is_pressed(vk)
             was = self._prev_buttons.get(vk, False)
-            if pressed and not was:
-                self.events.append({"t": self._elapsed(), "type": "mouse_button_down", "button": name})
-            elif was and not pressed:
-                self.events.append({"t": self._elapsed(), "type": "mouse_button_up", "button": name})
+            if pressed == was:
+                continue
             self._prev_buttons[vk] = pressed
+            self.events.append({
+                "t":      t,
+                "type":   "mouse_button_down" if pressed else "mouse_button_up",
+                "button": name,
+            })
 
     def _poll_cursor(self) -> None:
         cur = _cursor_pos()
@@ -125,5 +146,8 @@ class PollingRecorder:
             dx = cur[0] - self._prev_cursor[0]
             dy = cur[1] - self._prev_cursor[1]
             if dx or dy:
-                self.events.append({"t": self._elapsed(), "type": "mouse_move", "dx": dx, "dy": dy})
+                self.events.append({
+                    "t": self._elapsed(), "type": "mouse_move",
+                    "dx": dx, "dy": dy,
+                })
         self._prev_cursor = cur
