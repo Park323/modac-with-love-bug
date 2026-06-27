@@ -21,6 +21,30 @@ _DIALOG_SCRIPT = (
     "sys.stdout.write(p or '')\n"
 )
 
+_DIALOG_DIR_SCRIPT = (
+    "import tkinter\n"
+    "from tkinter import filedialog\n"
+    "root = tkinter.Tk()\n"
+    "root.withdraw()\n"
+    "root.attributes('-topmost', True)\n"
+    "p = filedialog.askdirectory(title='결과 동영상 폴더 선택')\n"
+    "import sys\n"
+    "sys.stdout.write(p or '')\n"
+)
+
+
+def pick_directory() -> str | None:
+    """OS 폴더 선택 다이얼로그. 취소 시 None."""
+    env = dict(os.environ, PYTHONIOENCODING="utf-8")
+    proc = subprocess.run(
+        [sys.executable, "-c", _DIALOG_DIR_SCRIPT],
+        capture_output=True,
+        encoding="utf-8",
+        env=env,
+    )
+    path = (proc.stdout or "").strip()
+    return path or None
+
 
 def pick_json_file() -> str | None:
     """OS 파일 다이얼로그로 JSON 경로 선택. 취소 시 None.
