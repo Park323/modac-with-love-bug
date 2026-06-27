@@ -166,3 +166,52 @@ def test_full_completion_always_done(tmp_path):
     _wait_done(ctrl)
     assert ctrl.status()["state"] == "done"
     assert len(play.items) == 6
+
+
+def _timed_scenario(tmp_path, ts):
+    p = tmp_path / "timed.json"
+    p.write_text(json.dumps({"events": [{"t": t, "type": "k"} for t in ts]}),
+                 encoding="utf-8")
+    return str(p)
+
+
+def test_realtime_paces_to_event_timestamps(tmp_path):
+    import time
+    play = RecordingPlay()
+    ctrl = RunController(play, Clock(), realtime=True)
+    t0 = time.perf_counter()
+    ctrl.start(_timed_scenario(tmp_path, [0.0, 0.2, 0.4]), repeat=1)
+    _wait_done(ctrl)
+    elapsed = time.perf_counter() - t0
+    assert len(play.items) == 3
+    assert elapsed >= 0.35  # 마지막 이벤트 t=0.4 만큼 대기 반영(여유)
+
+
+def test_realtime_false_is_instant(tmp_path):
+    import time
+    play = RecordingPlay()
+    ctrl = RunController(play, Clock(), realtime=False)
+    t0 = time.perf_counter()
+    ctrl.start(_timed_scenario(tmp_path, [0.0, 0.5, 1.0]), repeat=1)
+    _wait_done(ctrl)
+    elapsed = time.perf_counter() - t0
+    assert len(play.items) == 3
+    assert elapsed < 0.2  # 타이밍 무시 → 즉시
+
+
+def test_stop_interrupts_long_wait(tmp_path):
+    import time
+    play = RecordingPlay()
+    ctrl = RunController(play, Clock(), realtime=True)
+    # 첫 이벤트 즉시, 둘째는 100초 뒤 → 긴 대기 중 stop이 즉시 끊어야 함
+    ctrl.start(_timed_scenario(tmp_path, [0.0, 100.0]), repeat=1)
+    for _ in range(200):  # 첫 dispatch 발생까지 대기
+        if ctrl.status()["item_index"] >= 1:
+            break
+        time.sleep(0.01)
+    ctrl.stop()
+    t0 = time.perf_counter()
+    ctrl._thread.join(3.0)
+    assert (time.perf_counter() - t0) < 1.0  # 100초 안 기다리고 즉시 종료
+    assert ctrl.status()["state"] == "stopped"
+    assert len(play.items) == 1
