@@ -1,15 +1,4 @@
-"""
-Input recorder for keyboard/mouse scenarios.
-
-Default backend: low-level Windows hooks (WH_KEYBOARD_LL + WH_MOUSE_LL).
-Optional backend: polling via GetAsyncKeyState + GetCursorPos.
-
-Tradeoff: both hook and polling mouse movement are cursor-position based and
-may miss FPS raw-input deltas when the game captures the mouse.
-
-Each key event stores 'scan' and 'extended' fields so the replayer
-can use the scan-code path (see win_input.py).
-"""
+"""Record live keyboard and mouse input for later replay."""
 
 from __future__ import annotations
 
@@ -22,25 +11,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-try:
-    from .keys import (
-        ALL_KEYBOARD_VKS,
-        EXTENDED_VKS,
-        MOUSE_VK_TO_NAME,
-        VK_TO_NAME,
-        scan_code_for_vk,
-    )
-except ImportError:
-    from keys import (  # type: ignore[no-redef]
-        ALL_KEYBOARD_VKS,
-        EXTENDED_VKS,
-        MOUSE_VK_TO_NAME,
-        VK_TO_NAME,
-        scan_code_for_vk,
-    )
-
-user32 = ctypes.windll.user32
-kernel32 = ctypes.windll.kernel32
+from .keys import (
+    ALL_KEYBOARD_VKS,
+    EXTENDED_VKS,
+    MOUSE_VK_TO_NAME,
+    VK_TO_NAME,
+    require_windows,
+    scan_code_for_vk,
+)
 
 SAMPLE_HZ = 120
 
@@ -64,11 +42,12 @@ WM_MBUTTONUP = 0x0208
 LLKHF_EXTENDED = 0x01
 
 ULONG_PTR = wintypes.WPARAM
-LowLevelKeyboardProc = ctypes.WINFUNCTYPE(
-    ctypes.c_long, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM
+_WINFUNCTYPE = getattr(ctypes, "WINFUNCTYPE", ctypes.CFUNCTYPE)
+LowLevelKeyboardProc = _WINFUNCTYPE(
+    wintypes.LPARAM, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM
 )
-LowLevelMouseProc = ctypes.WINFUNCTYPE(
-    ctypes.c_long, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM
+LowLevelMouseProc = _WINFUNCTYPE(
+    wintypes.LPARAM, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM
 )
 
 
@@ -103,56 +82,37 @@ class MSLLHOOKSTRUCT(ctypes.Structure):
     ]
 
 
-user32.SetWindowsHookExW.argtypes = [
-    ctypes.c_int,
-    ctypes.c_void_p,
-    wintypes.HINSTANCE,
-    wintypes.DWORD,
-]
-user32.SetWindowsHookExW.restype = wintypes.HHOOK
-user32.CallNextHookEx.argtypes = [
-    wintypes.HHOOK,
-    ctypes.c_int,
-    wintypes.WPARAM,
-    wintypes.LPARAM,
-]
-user32.CallNextHookEx.restype = ctypes.c_long
-user32.UnhookWindowsHookEx.argtypes = [wintypes.HHOOK]
-user32.UnhookWindowsHookEx.restype = wintypes.BOOL
-user32.GetMessageW.argtypes = [
-    ctypes.POINTER(MSG),
-    wintypes.HWND,
-    wintypes.UINT,
-    wintypes.UINT,
-]
-user32.GetMessageW.restype = wintypes.BOOL
-user32.TranslateMessage.argtypes = [ctypes.POINTER(MSG)]
-user32.TranslateMessage.restype = wintypes.BOOL
-user32.DispatchMessageW.argtypes = [ctypes.POINTER(MSG)]
-user32.DispatchMessageW.restype = wintypes.LPARAM
-user32.PostThreadMessageW.argtypes = [
-    wintypes.DWORD,
-    wintypes.UINT,
-    wintypes.WPARAM,
-    wintypes.LPARAM,
-]
-user32.PostThreadMessageW.restype = wintypes.BOOL
-kernel32.GetCurrentThreadId.argtypes = []
-kernel32.GetCurrentThreadId.restype = wintypes.DWORD
-kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
-kernel32.GetModuleHandleW.restype = wintypes.HMODULE
+class HookInstallError(RuntimeError):
+    """Raised when Windows refuses to install a low-level input hook."""
+
+
+def _user32():
+    require_windows()
+    return ctypes.windll.user32
+
+
+def _kernel32():
+    require_windows()
+    return ctypes.windll.kernel32
 
 
 def _is_pressed(vk: int) -> bool:
-    return bool(user32.GetAsyncKeyState(vk) & 0x8000)
+    return bool(_user32().GetAsyncKeyState(vk) & 0x8000)
+
 
 def _cursor_pos() -> tuple[int, int]:
     pt = wintypes.POINT()
-    user32.GetCursorPos(ctypes.byref(pt))
-    return pt.x, pt.y
+    _user32().GetCursorPos(ctypes.byref(pt))
+    return int(pt.x), int(pt.y)
 
 
-class BaseRecorder:
+def _format_win_error(code: int) -> str:
+    if hasattr(ctypes, "FormatError"):
+        return ctypes.FormatError(code)
+    return f"Windows error {code}"
+
+
+class InputRecorder:
     backend = "base"
 
     def __init__(self) -> None:
@@ -164,45 +124,39 @@ class BaseRecorder:
     def is_recording(self) -> bool:
         return self._running
 
+    def start(self) -> None:
+        raise NotImplementedError
+
     def stop(self) -> None:
         self._running = False
 
-    def save(self, path: str, session_id: str = "session") -> dict:
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
+    def save(self, path: str | Path, session_id: str = "session") -> dict[str, Any]:
+        output = Path(path)
+        output.parent.mkdir(parents=True, exist_ok=True)
         duration = self.events[-1]["t"] if self.events else 0.0
-        data = {
-            "schema_version": "0.2",
+        data: dict[str, Any] = {
+            "schema_version": "1.0",
             "session": {
                 "session_id": session_id,
-                "game": "CrossFire",
-                "mode": "Team Deathmatch",
-                "map": "Transport Ship 2.0",
                 "recorded_at": datetime.now(timezone.utc).isoformat(),
                 "duration_sec": round(duration, 4),
                 "event_count": len(self.events),
             },
             "environment": {
+                "module": "test_scenario_executor",
                 "backend": self.backend,
-                "note": (
-                    "mouse_move dx/dy from cursor positions; FPS raw-input mode "
-                    "may report zero movement"
-                ),
             },
             "events": self.events,
         }
-        with open(path, "w", encoding="utf-8") as f:
+        with output.open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         return data
 
     def _elapsed(self) -> float:
         return round(time.perf_counter() - self._t0, 4)
 
-    def _get_position(self) -> dict | None:
-        # TODO: populate with map position data once assets/mapinfo.json is ready
-        return None
 
-
-class HookRecorder(BaseRecorder):
+class HookInputRecorder(InputRecorder):
     backend = "hook"
 
     def __init__(self, sample_hz: float = SAMPLE_HZ) -> None:
@@ -217,33 +171,60 @@ class HookRecorder(BaseRecorder):
         self._mouse_proc = LowLevelMouseProc(self._mouse_callback)
 
     def start(self) -> None:
-        """Run hook message loop (blocks until stop() is called)."""
+        require_windows()
+        user32 = _user32()
+        kernel32 = _kernel32()
+        user32.SetWindowsHookExW.argtypes = [
+            ctypes.c_int,
+            ctypes.c_void_p,
+            wintypes.HINSTANCE,
+            wintypes.DWORD,
+        ]
+        user32.SetWindowsHookExW.restype = wintypes.HHOOK
+        user32.CallNextHookEx.restype = ctypes.c_long
+        user32.UnhookWindowsHookEx.argtypes = [wintypes.HHOOK]
+        user32.UnhookWindowsHookEx.restype = wintypes.BOOL
+        user32.PostThreadMessageW.argtypes = [
+            wintypes.DWORD,
+            wintypes.UINT,
+            wintypes.WPARAM,
+            wintypes.LPARAM,
+        ]
+        user32.PostThreadMessageW.restype = wintypes.BOOL
+        kernel32.GetCurrentThreadId.argtypes = []
+        kernel32.GetCurrentThreadId.restype = wintypes.DWORD
+        kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
+        kernel32.GetModuleHandleW.restype = wintypes.HMODULE
+        kernel32.GetLastError.argtypes = []
+        kernel32.GetLastError.restype = wintypes.DWORD
+        kernel32.SetLastError.argtypes = [wintypes.DWORD]
+        kernel32.SetLastError.restype = None
+
         self.events = []
         self._prev_cursor = _cursor_pos()
         self._t0 = time.perf_counter()
         self._last_move_t = 0.0
-        self._running = True
+        self._running = False
         self._thread_id = int(kernel32.GetCurrentThreadId())
 
-        module = kernel32.GetModuleHandleW(None)
-        self._keyboard_hook = user32.SetWindowsHookExW(
-            WH_KEYBOARD_LL, self._keyboard_proc, module, 0
-        )
-        if not self._keyboard_hook:
+        try:
+            self._keyboard_hook = self._install_hook(
+                user32, kernel32, WH_KEYBOARD_LL, self._keyboard_proc, "keyboard"
+            )
+            self._mouse_hook = self._install_hook(
+                user32, kernel32, WH_MOUSE_LL, self._mouse_proc, "mouse"
+            )
+        except Exception:
+            if self._keyboard_hook:
+                user32.UnhookWindowsHookEx(self._keyboard_hook)
+                self._keyboard_hook = None
             self._running = False
-            raise ctypes.WinError()
-
-        self._mouse_hook = user32.SetWindowsHookExW(
-            WH_MOUSE_LL, self._mouse_proc, module, 0
-        )
-        if not self._mouse_hook:
-            user32.UnhookWindowsHookEx(self._keyboard_hook)
-            self._keyboard_hook = None
-            self._running = False
-            raise ctypes.WinError()
+            self._thread_id = 0
+            raise
 
         msg = MSG()
         try:
+            self._running = True
             while self._running:
                 result = user32.GetMessageW(ctypes.byref(msg), None, 0, 0)
                 if result == 0:
@@ -265,9 +246,38 @@ class HookRecorder(BaseRecorder):
     def stop(self) -> None:
         super().stop()
         if self._thread_id:
-            user32.PostThreadMessageW(self._thread_id, WM_QUIT, 0, 0)
+            _user32().PostThreadMessageW(self._thread_id, WM_QUIT, 0, 0)
+
+    def _install_hook(
+        self,
+        user32: Any,
+        kernel32: Any,
+        hook_id: int,
+        proc: Any,
+        label: str,
+    ) -> Any:
+        proc_ptr = ctypes.cast(proc, ctypes.c_void_p)
+        module = kernel32.GetModuleHandleW(None)
+        errors: list[str] = []
+
+        for module_handle in (module, None):
+            kernel32.SetLastError(0)
+            hook = user32.SetWindowsHookExW(hook_id, proc_ptr, module_handle, 0)
+            if hook:
+                return hook
+            code = int(kernel32.GetLastError())
+            handle_name = "current module" if module_handle else "NULL module"
+            errors.append(f"{handle_name}: {code} ({_format_win_error(code)})")
+
+        self._running = False
+        raise HookInstallError(
+            f"Could not install {label} hook. "
+            f"Tried current module and NULL module. Details: {'; '.join(errors)}. "
+            "If this PC blocks global hooks, start with backend='polling'."
+        )
 
     def _keyboard_callback(self, n_code: int, w_param: int, l_param: int) -> int:
+        user32 = _user32()
         if n_code >= 0 and self._running:
             data = ctypes.cast(l_param, ctypes.POINTER(KBDLLHOOKSTRUCT)).contents
             is_down = w_param in (WM_KEYDOWN, WM_SYSKEYDOWN)
@@ -277,16 +287,16 @@ class HookRecorder(BaseRecorder):
                 scan = int(data.scanCode) or scan_code_for_vk(vk)
                 if scan:
                     self.events.append({
-                        "t":        self._elapsed(),
-                        "type":     "key_down" if is_down else "key_up",
-                        "key":      VK_TO_NAME.get(vk, f"0x{vk:02X}"),
-                        "scan":     scan,
+                        "t": self._elapsed(),
+                        "type": "key_down" if is_down else "key_up",
+                        "key": VK_TO_NAME.get(vk, f"0x{vk:02X}"),
+                        "scan": scan,
                         "extended": bool(data.flags & LLKHF_EXTENDED) or vk in EXTENDED_VKS,
-                        "position": self._get_position(),
                     })
         return user32.CallNextHookEx(self._keyboard_hook, n_code, w_param, l_param)
 
     def _mouse_callback(self, n_code: int, w_param: int, l_param: int) -> int:
+        user32 = _user32()
         if n_code >= 0 and self._running:
             data = ctypes.cast(l_param, ctypes.POINTER(MSLLHOOKSTRUCT)).contents
             cur = (int(data.pt.x), int(data.pt.y))
@@ -304,7 +314,6 @@ class HookRecorder(BaseRecorder):
                             "type": "mouse_move",
                             "dx": dx,
                             "dy": dy,
-                            "position": self._get_position(),
                         })
                 self._prev_cursor = cur
                 return user32.CallNextHookEx(self._mouse_hook, n_code, w_param, l_param)
@@ -321,17 +330,16 @@ class HookRecorder(BaseRecorder):
             if button_event:
                 event_type, button = button_event
                 self.events.append({
-                    "t":        self._elapsed(),
-                    "type":     event_type,
-                    "button":   button,
-                    "position": self._get_position(),
+                    "t": self._elapsed(),
+                    "type": event_type,
+                    "button": button,
                 })
             self._prev_cursor = cur
 
         return user32.CallNextHookEx(self._mouse_hook, n_code, w_param, l_param)
 
 
-class PollingRecorder(BaseRecorder):
+class PollingInputRecorder(InputRecorder):
     backend = "polling"
 
     def __init__(self, sample_hz: float = SAMPLE_HZ) -> None:
@@ -341,10 +349,8 @@ class PollingRecorder(BaseRecorder):
         self._prev_buttons: dict[int, bool] = {}
         self._prev_cursor: tuple[int, int] | None = None
 
-    # ── public ──────────────────────────────────────────────────────────────
-
     def start(self) -> None:
-        """Run polling loop (blocks until stop() is called)."""
+        require_windows()
         self.events = []
         self._prev_keys = {}
         self._prev_buttons = {}
@@ -358,11 +364,6 @@ class PollingRecorder(BaseRecorder):
             self._poll_cursor()
             time.sleep(self._interval)
 
-    def stop(self) -> None:
-        super().stop()
-
-    # ── polling ──────────────────────────────────────────────────────────────
-
     def _poll_keys(self) -> None:
         t = self._elapsed()
         for vk in ALL_KEYBOARD_VKS:
@@ -370,19 +371,16 @@ class PollingRecorder(BaseRecorder):
             was = self._prev_keys.get(vk, False)
             if pressed == was:
                 continue
-
             self._prev_keys[vk] = pressed
             scan = scan_code_for_vk(vk)
-            if scan == 0:
+            if not scan:
                 continue
-
             self.events.append({
-                "t":        t,
-                "type":     "key_down" if pressed else "key_up",
-                "key":      VK_TO_NAME.get(vk, f"0x{vk:02X}"),
-                "scan":     scan,
+                "t": t,
+                "type": "key_down" if pressed else "key_up",
+                "key": VK_TO_NAME.get(vk, f"0x{vk:02X}"),
+                "scan": scan,
                 "extended": vk in EXTENDED_VKS,
-                "position": self._get_position(),
             })
 
     def _poll_mouse_buttons(self) -> None:
@@ -394,10 +392,9 @@ class PollingRecorder(BaseRecorder):
                 continue
             self._prev_buttons[vk] = pressed
             self.events.append({
-                "t":        t,
-                "type":     "mouse_button_down" if pressed else "mouse_button_up",
-                "button":   name,
-                "position": self._get_position(),
+                "t": t,
+                "type": "mouse_button_down" if pressed else "mouse_button_up",
+                "button": name,
             })
 
     def _poll_cursor(self) -> None:
@@ -407,51 +404,37 @@ class PollingRecorder(BaseRecorder):
             dy = cur[1] - self._prev_cursor[1]
             if dx or dy:
                 self.events.append({
-                    "t":        self._elapsed(),
-                    "type":     "mouse_move",
-                    "dx":       dx,
-                    "dy":       dy,
-                    "position": self._get_position(),
+                    "t": self._elapsed(),
+                    "type": "mouse_move",
+                    "dx": dx,
+                    "dy": dy,
                 })
         self._prev_cursor = cur
 
 
-def create_recorder(backend: str = "hook", sample_hz: float = SAMPLE_HZ) -> BaseRecorder:
+def create_input_recorder(
+    backend: str = "hook", sample_hz: float = SAMPLE_HZ
+) -> InputRecorder:
     if backend == "hook":
-        return HookRecorder(sample_hz=sample_hz)
+        return HookInputRecorder(sample_hz=sample_hz)
     if backend == "polling":
-        return PollingRecorder(sample_hz=sample_hz)
-    raise ValueError(f"Unknown recorder backend: {backend}")
+        return PollingInputRecorder(sample_hz=sample_hz)
+    raise ValueError(f"Unknown input recorder backend: {backend}")
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Record keyboard/mouse input.")
-    backend = parser.add_mutually_exclusive_group()
-    backend.add_argument(
-        "--hook",
-        action="store_const",
-        const="hook",
-        dest="backend",
-        help="record with low-level Windows hooks (default)",
-    )
-    backend.add_argument(
-        "--polling",
-        action="store_const",
-        const="polling",
-        dest="backend",
-        help="record by polling GetAsyncKeyState/GetCursorPos",
-    )
-    parser.set_defaults(backend="hook")
+    parser = argparse.ArgumentParser(description="Record Windows keyboard/mouse input.")
     parser.add_argument("output", help="path to write the recording JSON")
     parser.add_argument("--session-id", default="session")
+    parser.add_argument("--backend", choices=["hook", "polling"], default="hook")
     parser.add_argument("--sample-hz", type=float, default=SAMPLE_HZ)
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
-    recorder = create_recorder(args.backend, sample_hz=args.sample_hz)
-    print(f"Recording with {args.backend}. Press Ctrl+C to stop.")
+    recorder = create_input_recorder(args.backend, sample_hz=args.sample_hz)
+    print(f"Recording input with {args.backend}. Press Ctrl+C to stop.")
     try:
         recorder.start()
     except KeyboardInterrupt:
