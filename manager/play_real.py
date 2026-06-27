@@ -32,11 +32,13 @@ class RealPlayModule(IPlayModule):
         self._held = {}
         # 재생 시작 시 커서를 화면 중심으로 1회 이동 — 매니저는 이벤트를 하나씩
         # dispatch하므로 play_actions를 거치지 않는다. 여기서 원점을 고정한다.
-        try:
-            from test_scenario_executor.input import win_input as wi
-            wi.move_cursor_to_center()
-        except Exception:
-            pass
+        # [임시] 자동주행 마우스 회전 미동작 원인 격리용으로 비활성화. 회전이
+        #        정상화되면 recenter가 원인 — 그때 raw-input 친화적으로 재도입.
+        # try:
+        #     from test_scenario_executor.input import win_input as wi
+        #     wi.move_cursor_to_center()
+        # except Exception:
+        #     pass
 
     def dispatch(self, item: InputItem) -> None:
         if self._player is None:
