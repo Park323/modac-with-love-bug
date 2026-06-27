@@ -4,9 +4,10 @@ Windows에서 키보드/마우스 입력을 기록하고, 화면을 저장하며
 
 ## 제공 기능
 
-- `input_logger.py`: 실시간 키보드/마우스 입력을 기록하고 JSON으로 저장합니다.
-- `screen_recorder.py`: 기능 시작부터 종료까지 30fps 스크린샷과 MP4 동영상을 저장합니다.
-- `player.py`: 외부앱에서 받은 JSON array를 키보드/마우스 입력으로 재생합니다.
+- `input/logger.py`: 실시간 키보드/마우스 입력을 기록하고 JSON으로 저장합니다.
+- `screen/recorder.py`: 기능 시작부터 종료까지 30fps 스크린샷과 MP4 동영상을 저장합니다.
+- `playback/player.py`: 외부앱에서 받은 JSON array를 키보드/마우스 입력으로 재생합니다.
+- `core/session_paths.py`: 세션별 저장 폴더와 manifest 경로를 관리합니다.
 - `api.py`: 외부앱과 통신하기 위한 FastAPI 엔드포인트를 제공합니다.
 
 

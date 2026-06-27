@@ -8,9 +8,9 @@ import time
 from pathlib import Path
 from typing import Any, Iterable
 
-from . import win_input as wi
-from .keys import NAME_TO_VK, scan_code_for_vk
-from .win_input import (
+from ..input import win_input as wi
+from ..input.keys import NAME_TO_VK, scan_code_for_vk
+from ..input.win_input import (
     MOUSEEVENTF_HWHEEL,
     MOUSEEVENTF_LEFTDOWN,
     MOUSEEVENTF_LEFTUP,

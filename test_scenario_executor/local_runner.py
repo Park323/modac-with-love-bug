@@ -9,9 +9,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from .input_logger import InputRecorder, create_input_recorder
-from .player import ActionPlayer
-from .session_paths import (
+from .core.session_paths import (
     OUTPUT_ROOT,
     create_session_dir,
     session_paths,
@@ -19,6 +17,8 @@ from .session_paths import (
     utc_now_iso,
     write_manifest,
 )
+from .input.logger import InputRecorder, create_input_recorder
+from .playback.player import ActionPlayer
 
 
 class ThreadResult:
@@ -148,7 +148,7 @@ def _start_screen(
     fps: float,
     screenshot_callback_url: str | None,
 ) -> tuple[Any, threading.Thread, ThreadResult, dict[str, str | None]]:
-    from .screen_recorder import ScreenRecorder
+    from .screen.recorder import ScreenRecorder
 
     recorder = ScreenRecorder(
         output_root=OUTPUT_ROOT,

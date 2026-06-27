@@ -15,7 +15,12 @@ import cv2
 import mss
 import numpy as np
 
-from .session_paths import create_session_dir, session_paths, utc_now_iso, write_manifest
+from ..core.session_paths import (
+    create_session_dir,
+    session_paths,
+    utc_now_iso,
+    write_manifest,
+)
 
 
 class ScreenRecorder:

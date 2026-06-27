@@ -11,10 +11,7 @@ from typing import Any, Literal
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from .input_logger import InputRecorder, create_input_recorder
-from .player import ActionPlayer
-from .screen_recorder import ScreenRecorder
-from .session_paths import (
+from .core.session_paths import (
     OUTPUT_ROOT,
     create_session_dir,
     session_paths,
@@ -22,6 +19,9 @@ from .session_paths import (
     utc_now_iso,
     write_manifest,
 )
+from .input.logger import InputRecorder, create_input_recorder
+from .playback.player import ActionPlayer
+from .screen.recorder import ScreenRecorder
 
 app = FastAPI(title="Test Scenario Executor API", version="1.0.0")
 
