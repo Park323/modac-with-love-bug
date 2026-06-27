@@ -71,11 +71,11 @@ class RealCaptureModule(ICaptureModule):
         self._thread.start()
 
     def next(self) -> Frame:
+        # [A/B] 분석 frame 소스를 #17 이전 동작(latest_frame)으로 되돌림 — 항상
+        # 갓 잡은 최신 프레임을 반환(컨트롤러가 10fps로 폴링). 스샷 콜백 큐(묵은
+        # 프레임/지연)가 회전 미동작 원인인지 확인용. 큐 경로는 보존만.
         ts = self._clock.now_ms() if self._clock is not None else 0
-        try:
-            arr = self._frame_q.get(timeout=0.2)
-        except _queue.Empty:
-            arr = None
+        arr = self._recorder.latest_frame if self._recorder is not None else None
         return Frame(timestamp_ms=ts, bgr=arr)
 
     def end(self) -> None:
