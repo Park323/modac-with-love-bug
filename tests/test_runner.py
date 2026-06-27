@@ -168,6 +168,50 @@ def test_full_completion_always_done(tmp_path):
     assert len(play.items) == 6
 
 
+class FakeCapture:
+    def __init__(self):
+        self.began = 0
+        self.ended = 0
+
+    def begin(self, clock):
+        self.began += 1
+
+    def next(self):
+        raise NotImplementedError
+
+    def end(self):
+        self.ended += 1
+
+
+def test_capture_begin_end_called_on_completion(tmp_path):
+    play = RecordingPlay()
+    cap = FakeCapture()
+    ctrl = RunController(play, Clock(), realtime=False, capture=cap)
+    ctrl.start(_scenario(tmp_path, 3), repeat=1)
+    _wait_done(ctrl)
+    assert cap.began == 1
+    assert cap.ended == 1
+
+
+def test_capture_end_called_on_stop(tmp_path):
+    class SlowPlay(RecordingPlay):
+        def dispatch(self, item):
+            super().dispatch(item)
+            import time
+            time.sleep(0.02)
+
+    play = SlowPlay()
+    cap = FakeCapture()
+    ctrl = RunController(play, Clock(), realtime=False, capture=cap)
+    ctrl.start(_scenario(tmp_path, 1000), repeat=1)
+    import time
+    time.sleep(0.1)
+    ctrl.stop()
+    ctrl._thread.join(5.0)
+    assert cap.began == 1
+    assert cap.ended == 1  # 중단돼도 Capture 종료됨
+
+
 def _timed_scenario(tmp_path, ts):
     p = tmp_path / "timed.json"
     p.write_text(json.dumps({"events": [{"t": t, "type": "k"} for t in ts]}),

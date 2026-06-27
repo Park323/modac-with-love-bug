@@ -6,6 +6,8 @@ from pydantic import BaseModel
 
 from manager.clock import Clock
 from manager.play_stub import StubPlayModule
+from manager.play_real import RealPlayModule
+from manager.capture_real import RealCaptureModule
 from manager.runner import RunController
 from manager.control.dialog import pick_json_file
 
@@ -13,13 +15,15 @@ _UI_DIR = Path(__file__).resolve().parents[2] / "ui"
 
 app = FastAPI(title="QA PlayTest Manager Control", version="0.1.0")
 
-controller = RunController(StubPlayModule(), Clock())
+# 프로덕션: 실제 Play(OS 입력) + Capture(화면 녹화). realtime 페이싱.
+controller = RunController(
+    RealPlayModule(), Clock(), realtime=True, capture=RealCaptureModule())
 
 
 def reset_controller() -> None:
-    """테스트용: 새 컨트롤러로 교체."""
+    """테스트용: 실제 OS 입력/녹화 없는 Stub 컨트롤러로 교체."""
     global controller
-    controller = RunController(StubPlayModule(), Clock())
+    controller = RunController(StubPlayModule(), Clock(), realtime=False)
 
 
 class StartRequest(BaseModel):

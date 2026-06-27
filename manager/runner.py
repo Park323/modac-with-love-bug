@@ -11,12 +11,14 @@ class RunController:
     """백그라운드 스레드에서 시나리오를 repeat회 반복 재생. 동시 1개."""
 
     def __init__(self, play: IPlayModule, clock: Clock,
-                 realtime: bool = True) -> None:
+                 realtime: bool = True, capture=None) -> None:
         self._play = play
         self._clock = clock
         # realtime=True: event["t"]만큼 대기하며 원본 녹화 속도로 재생.
         # False: 타이밍 무시, 즉시 dispatch(테스트용).
         self._realtime = realtime
+        # capture: ICaptureModule | None. begin/end로 Play와 함께 시작/종료 알림.
+        self._capture = capture
         self._thread: threading.Thread | None = None
         self._running = False
         self._lock = threading.Lock()
@@ -52,6 +54,8 @@ class RunController:
         try:
             self._clock.start()
             self._play.begin(self._clock)
+            if self._capture is not None:
+                self._capture.begin(self._clock)  # Play와 함께 Capture 시작 알림
             count = 0
             for r in range(repeat):
                 if not self._running:
@@ -84,6 +88,11 @@ class RunController:
                 self._state = "error"
                 self._error = str(e)
         finally:
+            if self._capture is not None:
+                try:
+                    self._capture.end()  # Capture 항상 종료(녹화 누수 방지)
+                except Exception:  # noqa: BLE001
+                    pass
             self._running = False
 
     def _wait_until(self, target: float) -> bool:
