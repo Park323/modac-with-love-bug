@@ -14,10 +14,14 @@ from pydantic import BaseModel
 from .input_logger import InputRecorder, create_input_recorder
 from .player import ActionPlayer
 from .screen_recorder import ScreenRecorder
-
-OUTPUT_ROOT = Path("test_scenario_executor_output")
-INPUT_RECORDINGS_DIR = OUTPUT_ROOT / "input_recordings"
-SCREEN_RECORDINGS_DIR = OUTPUT_ROOT / "screen_recordings"
+from .session_paths import (
+    OUTPUT_ROOT,
+    create_session_dir,
+    session_paths,
+    stringify_paths,
+    utc_now_iso,
+    write_manifest,
+)
 
 app = FastAPI(title="Test Scenario Executor API", version="1.0.0")
 
@@ -26,13 +30,17 @@ _input_thread: threading.Thread | None = None
 _input_start_error: BaseException | None = None
 _input_lock = threading.Lock()
 
-_screen_recorder = ScreenRecorder(output_root=SCREEN_RECORDINGS_DIR, fps=30.0)
+_screen_recorder = ScreenRecorder(output_root=OUTPUT_ROOT, fps=30.0)
 _screen_thread: threading.Thread | None = None
 _screen_lock = threading.Lock()
 
 _player = ActionPlayer(jitter_ms=0.0)
 _player_thread: threading.Thread | None = None
 _player_lock = threading.Lock()
+
+_active_session_id: str | None = None
+_active_session_dir: Path | None = None
+_active_test_started_at: str | None = None
 
 
 class InputRecordStart(BaseModel):
@@ -64,12 +72,59 @@ class PlayFileRequest(BaseModel):
 
 
 def _input_path(session_id: str) -> Path:
-    safe_id = "".join(c if c.isalnum() or c in "-_." else "_" for c in session_id)
-    return INPUT_RECORDINGS_DIR / f"{safe_id}.json"
+    session_dir, _started_at = _ensure_session(session_id)
+    return session_paths(session_dir)["input_path"]
+
+
+def _ensure_session(session_id: str) -> tuple[Path, str]:
+    global _active_session_id, _active_session_dir, _active_test_started_at
+    if _active_session_dir and _active_session_id == session_id and _active_test_started_at:
+        return _active_session_dir, _active_test_started_at
+
+    if (
+        _active_session_dir
+        and _active_session_id != session_id
+        and ((_input_recorder and _input_recorder.is_recording) or _screen_recorder.is_recording)
+    ):
+        raise HTTPException(400, f"Another session is already active: {_active_session_id}")
+
+    _active_session_id = session_id
+    _active_test_started_at = utc_now_iso()
+    _active_session_dir = create_session_dir(session_id, OUTPUT_ROOT, _active_test_started_at)
+    paths = session_paths(_active_session_dir)
+    paths["input_dir"].mkdir(parents=True, exist_ok=True)
+    paths["screenshots_dir"].mkdir(parents=True, exist_ok=True)
+    _write_session_manifest(status="started")
+    return _active_session_dir, _active_test_started_at
+
+
+def _write_session_manifest(
+    status: str,
+    input_result: dict[str, Any] | None = None,
+    screen_result: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not _active_session_dir or not _active_session_id or not _active_test_started_at:
+        return {}
+
+    paths = session_paths(_active_session_dir)
+    data: dict[str, Any] = {
+        "schema_version": "1.0",
+        "session_id": _active_session_id,
+        "status": status,
+        "test_started_at": _active_test_started_at,
+        "updated_at": utc_now_iso(),
+        "paths": stringify_paths(paths),
+    }
+    if input_result:
+        data["input"] = input_result
+    if screen_result:
+        data["screen"] = screen_result
+    return write_manifest(_active_session_dir, data)
 
 
 def _start_input_recording(config: InputRecordStart) -> dict[str, Any]:
     global _input_recorder, _input_thread, _input_start_error
+    session_dir, started_at = _ensure_session(config.session_id)
     with _input_lock:
         if _input_recorder and _input_recorder.is_recording:
             raise HTTPException(400, "Input recorder is already recording")
@@ -104,7 +159,9 @@ def _start_input_recording(config: InputRecordStart) -> dict[str, Any]:
         "status": "recording",
         "session_id": config.session_id,
         "backend": config.backend,
-        "save_path": str(_input_path(config.session_id)),
+        "session_dir": str(session_dir),
+        "test_started_at": started_at,
+        "save_path": str(session_paths(session_dir)["input_path"]),
     }
 
 
@@ -127,15 +184,20 @@ def _stop_input_recording(session_id: str) -> dict[str, Any]:
 
 def _start_screen_recording(config: ScreenStartRequest) -> dict[str, Any]:
     global _screen_recorder, _screen_thread
+    session_dir, started_at = _ensure_session(config.session_id)
     with _screen_lock:
         if _screen_recorder.is_recording:
             raise HTTPException(400, "Screen recorder is already recording")
         _screen_recorder = ScreenRecorder(
-            output_root=SCREEN_RECORDINGS_DIR,
+            output_root=OUTPUT_ROOT,
             fps=config.fps,
             screenshot_callback_url=config.screenshot_callback_url,
         )
-        locations = _screen_recorder.prepare(config.session_id)
+        locations = _screen_recorder.prepare(
+            config.session_id,
+            session_dir=session_dir,
+            test_started_at=started_at,
+        )
         _screen_thread = threading.Thread(
             target=_screen_recorder.start,
             args=(config.session_id,),
@@ -146,6 +208,8 @@ def _start_screen_recording(config: ScreenStartRequest) -> dict[str, Any]:
         "status": "recording",
         "session_id": config.session_id,
         "fps": config.fps,
+        "session_dir": str(session_dir),
+        "test_started_at": started_at,
         "locations": locations,
         "screenshot_callback_url": config.screenshot_callback_url,
     }
@@ -196,11 +260,17 @@ def test_start(config: TestStartRequest) -> dict[str, Any]:
 def test_stop(config: SessionRequest) -> dict[str, Any]:
     input_result = _stop_input_recording(config.session_id)
     screen_result = _stop_screen_recording()
+    manifest = _write_session_manifest(
+        status="stopped",
+        input_result=input_result,
+        screen_result=screen_result,
+    )
     return {
         "status": "stopped",
         "session_id": config.session_id,
         "input": input_result,
         "screen": screen_result,
+        "manifest": manifest,
     }
 
 
@@ -211,15 +281,17 @@ def input_record_start(config: InputRecordStart) -> dict[str, Any]:
 
 @app.post("/input/record/stop")
 def input_record_stop(config: SessionRequest) -> dict[str, Any]:
-    return _stop_input_recording(config.session_id)
+    input_result = _stop_input_recording(config.session_id)
+    manifest = _write_session_manifest(status="input_saved", input_result=input_result)
+    return {**input_result, "manifest": manifest}
 
 
 @app.get("/input/recordings")
 def list_input_recordings() -> dict[str, Any]:
-    if not INPUT_RECORDINGS_DIR.exists():
+    if not OUTPUT_ROOT.exists():
         return {"recordings": []}
     recordings = []
-    for path in sorted(INPUT_RECORDINGS_DIR.glob("*.json")):
+    for path in sorted(OUTPUT_ROOT.glob("*/input_recording/input.json")):
         with path.open(encoding="utf-8") as f:
             data = json.load(f)
         session = data.get("session", {})
@@ -240,7 +312,9 @@ def screen_record_start(config: ScreenStartRequest) -> dict[str, Any]:
 
 @app.post("/screen/record/stop")
 def screen_record_stop() -> dict[str, Any]:
-    return _stop_screen_recording()
+    screen_result = _stop_screen_recording()
+    manifest = _write_session_manifest(status="screen_saved", screen_result=screen_result)
+    return {**screen_result, "manifest": manifest}
 
 
 @app.get("/screen/record/status")

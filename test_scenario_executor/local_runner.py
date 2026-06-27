@@ -11,10 +11,14 @@ from typing import Any, Callable
 
 from .input_logger import InputRecorder, create_input_recorder
 from .player import ActionPlayer
-
-OUTPUT_ROOT = Path("test_scenario_executor_output")
-INPUT_RECORDINGS_DIR = OUTPUT_ROOT / "input_recordings"
-SCREEN_RECORDINGS_DIR = OUTPUT_ROOT / "screen_recordings"
+from .session_paths import (
+    OUTPUT_ROOT,
+    create_session_dir,
+    session_paths,
+    stringify_paths,
+    utc_now_iso,
+    write_manifest,
+)
 
 
 class ThreadResult:
@@ -22,13 +26,52 @@ class ThreadResult:
         self.error: BaseException | None = None
 
 
-def _input_path(session_id: str) -> Path:
-    safe_id = "".join(c if c.isalnum() or c in "-_." else "_" for c in session_id)
-    return INPUT_RECORDINGS_DIR / f"{safe_id}.json"
-
-
 def _print_json(data: dict[str, Any]) -> None:
     print(json.dumps(data, indent=2, ensure_ascii=False))
+
+
+def _new_session(session_id: str) -> tuple[Path, str, dict[str, Path]]:
+    started_at = utc_now_iso()
+    session_dir = create_session_dir(session_id, OUTPUT_ROOT, started_at)
+    paths = session_paths(session_dir)
+    paths["input_dir"].mkdir(parents=True, exist_ok=True)
+    paths["screenshots_dir"].mkdir(parents=True, exist_ok=True)
+    write_manifest(
+        session_dir,
+        {
+            "schema_version": "1.0",
+            "session_id": session_id,
+            "status": "started",
+            "test_started_at": started_at,
+            "updated_at": utc_now_iso(),
+            "paths": stringify_paths(paths),
+        },
+    )
+    return session_dir, started_at, paths
+
+
+def _write_final_manifest(
+    session_id: str,
+    session_dir: Path,
+    started_at: str,
+    status: str,
+    input_result: dict[str, Any] | None = None,
+    screen_result: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    paths = session_paths(session_dir)
+    data: dict[str, Any] = {
+        "schema_version": "1.0",
+        "session_id": session_id,
+        "status": status,
+        "test_started_at": started_at,
+        "updated_at": utc_now_iso(),
+        "paths": stringify_paths(paths),
+    }
+    if input_result:
+        data["input"] = input_result
+    if screen_result:
+        data["screen"] = screen_result
+    return write_manifest(session_dir, data)
 
 
 def _start_thread(target: Callable[[], None]) -> tuple[threading.Thread, ThreadResult]:
@@ -66,18 +109,20 @@ def _wait_started(
 
 def _start_input(
     session_id: str,
+    input_path: Path,
     backend: str,
     sample_hz: float,
 ) -> tuple[InputRecorder, threading.Thread, ThreadResult]:
     recorder = create_input_recorder(backend, sample_hz=sample_hz)
     thread, result = _start_thread(recorder.start)
     _wait_started("input logger", thread, result, lambda: recorder.is_recording)
-    print(f"[input] started: backend={backend}, save_path={_input_path(session_id)}")
+    print(f"[input] started: backend={backend}, save_path={input_path}")
     return recorder, thread, result
 
 
 def _stop_input(
     session_id: str,
+    input_path: Path,
     recorder: InputRecorder,
     thread: threading.Thread,
     result: ThreadResult,
@@ -86,12 +131,11 @@ def _stop_input(
     thread.join(timeout=2.0)
     if result.error:
         raise RuntimeError(f"input logger failed: {result.error}") from result.error
-    path = _input_path(session_id)
-    saved = recorder.save(path, session_id)
+    saved = recorder.save(input_path, session_id)
     return {
         "status": "saved",
         "session_id": session_id,
-        "path": str(path),
+        "path": str(input_path),
         "event_count": saved["session"]["event_count"],
         "duration_sec": saved["session"]["duration_sec"],
     }
@@ -99,17 +143,19 @@ def _stop_input(
 
 def _start_screen(
     session_id: str,
+    session_dir: Path,
+    started_at: str,
     fps: float,
     screenshot_callback_url: str | None,
 ) -> tuple[Any, threading.Thread, ThreadResult, dict[str, str | None]]:
     from .screen_recorder import ScreenRecorder
 
     recorder = ScreenRecorder(
-        output_root=SCREEN_RECORDINGS_DIR,
+        output_root=OUTPUT_ROOT,
         fps=fps,
         screenshot_callback_url=screenshot_callback_url,
     )
-    locations = recorder.prepare(session_id)
+    locations = recorder.prepare(session_id, session_dir=session_dir, test_started_at=started_at)
     thread, result = _start_thread(lambda: recorder.start(session_id))
     _wait_started("screen recorder", thread, result, lambda: recorder.is_recording)
     print(f"[screen] started: fps={fps}, video_path={locations.get('video_path')}")
@@ -137,12 +183,13 @@ def run_test_session(args: argparse.Namespace) -> None:
     screen_thread: threading.Thread | None = None
     screen_result: ThreadResult | None = None
 
+    session_dir, started_at, paths = _new_session(args.session_id)
     try:
         input_recorder, input_thread, input_result = _start_input(
-            args.session_id, args.backend, args.sample_hz
+            args.session_id, paths["input_path"], args.backend, args.sample_hz
         )
         screen_recorder, screen_thread, screen_result, locations = _start_screen(
-            args.session_id, args.fps, args.screenshot_callback_url
+            args.session_id, session_dir, started_at, args.fps, args.screenshot_callback_url
         )
         print(f"[test] running for {args.duration_sec}s")
         time.sleep(args.duration_sec)
@@ -153,27 +200,47 @@ def run_test_session(args: argparse.Namespace) -> None:
         }
         if input_recorder and input_thread and input_result:
             output["input"] = _stop_input(
-                args.session_id, input_recorder, input_thread, input_result
+                args.session_id, paths["input_path"], input_recorder, input_thread, input_result
             )
         if screen_recorder and screen_thread and screen_result:
             output["screen"] = _stop_screen(screen_recorder, screen_thread, screen_result)
+        output["manifest"] = _write_final_manifest(
+            args.session_id,
+            session_dir,
+            started_at,
+            "stopped",
+            input_result=output.get("input"),
+            screen_result=output.get("screen"),
+        )
         _print_json(output)
 
 
 def run_input_record(args: argparse.Namespace) -> None:
-    recorder, thread, result = _start_input(args.session_id, args.backend, args.sample_hz)
+    session_dir, started_at, paths = _new_session(args.session_id)
+    recorder, thread, result = _start_input(
+        args.session_id, paths["input_path"], args.backend, args.sample_hz
+    )
     print(f"[input] running for {args.duration_sec}s")
     time.sleep(args.duration_sec)
-    _print_json(_stop_input(args.session_id, recorder, thread, result))
+    input_result = _stop_input(args.session_id, paths["input_path"], recorder, thread, result)
+    manifest = _write_final_manifest(
+        args.session_id, session_dir, started_at, "input_saved", input_result=input_result
+    )
+    _print_json({**input_result, "manifest": manifest})
 
 
 def run_screen_record(args: argparse.Namespace) -> None:
+    session_dir, started_at, _paths = _new_session(args.session_id)
     recorder, thread, result, _locations = _start_screen(
-        args.session_id, args.fps, args.screenshot_callback_url
+        args.session_id, session_dir, started_at, args.fps, args.screenshot_callback_url
     )
     print(f"[screen] running for {args.duration_sec}s")
     time.sleep(args.duration_sec)
-    _print_json(_stop_screen(recorder, thread, result))
+    screen_result = _stop_screen(recorder, thread, result)
+    manifest = _write_final_manifest(
+        args.session_id, session_dir, started_at, "screen_saved", screen_result=screen_result
+    )
+    _print_json({**screen_result, "manifest": manifest})
 
 
 def run_player_sample(args: argparse.Namespace) -> None:

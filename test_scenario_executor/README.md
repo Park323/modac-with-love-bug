@@ -12,10 +12,22 @@ Windows에서 키보드/마우스 입력을 기록하고, 화면을 저장하며
 
 ## 저장 위치
 
-- 입력 기록: `test_scenario_executor_output/input_recordings/{session_id}.json`
-- 화면 스크린샷: `test_scenario_executor_output/screen_recordings/{session_id}_{timestamp}/screenshots/`
-- 화면 동영상: `test_scenario_executor_output/screen_recordings/{session_id}_{timestamp}/screen.mp4`
-- 화면 녹화 메타데이터: `test_scenario_executor_output/screen_recordings/{session_id}_{timestamp}/manifest.json`
+결과는 세션별 폴더에 모입니다.
+
+```text
+test_scenario_executor_output/
+  {session_id}_{timestamp}/
+    input_recording/
+      input.json
+    screen_recording/
+      screenshots/
+        screenshot_20260627_120000_000000_000000.png
+        screenshot_20260627_120000_033333_000001.png
+      screen.mp4
+    manifest.json
+```
+
+`manifest.json`에는 `test_started_at` 필드로 테스트 시작 시간이 기록됩니다.
 
 
 ## 서버 실행
@@ -93,15 +105,19 @@ Content-Type: application/json
   "session_id": "tdm_run_001",
   "input": {
     "status": "recording",
-    "save_path": "test_scenario_executor_output/input_recordings/tdm_run_001.json"
+    "session_dir": "test_scenario_executor_output/tdm_run_001_20260627_120000",
+    "test_started_at": "2026-06-27T03:00:00.000000+00:00",
+    "save_path": "test_scenario_executor_output/tdm_run_001_20260627_120000/input_recording/input.json"
   },
   "screen": {
     "status": "recording",
+    "session_dir": "test_scenario_executor_output/tdm_run_001_20260627_120000",
+    "test_started_at": "2026-06-27T03:00:00.000000+00:00",
     "locations": {
-      "session_dir": "test_scenario_executor_output/screen_recordings/tdm_run_001_20260627_120000",
-      "screenshots_dir": "test_scenario_executor_output/screen_recordings/tdm_run_001_20260627_120000/screenshots",
-      "video_path": "test_scenario_executor_output/screen_recordings/tdm_run_001_20260627_120000/screen.mp4",
-      "manifest_path": "test_scenario_executor_output/screen_recordings/tdm_run_001_20260627_120000/manifest.json"
+      "session_dir": "test_scenario_executor_output/tdm_run_001_20260627_120000",
+      "screenshots_dir": "test_scenario_executor_output/tdm_run_001_20260627_120000/screen_recording/screenshots",
+      "video_path": "test_scenario_executor_output/tdm_run_001_20260627_120000/screen_recording/screen.mp4",
+      "manifest_path": "test_scenario_executor_output/tdm_run_001_20260627_120000/manifest.json"
     },
     "screenshot_callback_url": "http://127.0.0.1:9000/screenshots"
   }
@@ -117,12 +133,12 @@ Content-Type: application/json
   "frame_index": 42,
   "t": 1.4,
   "created_at": "2026-06-27T03:00:01.400000+00:00",
-  "screenshot_path": "test_scenario_executor_output/screen_recordings/tdm_run_001_20260627_120000/screenshots/frame_000042.png",
+  "screenshot_path": "test_scenario_executor_output/tdm_run_001_20260627_120000/screen_recording/screenshots/screenshot_20260627_120001_400000_000042.png",
   "locations": {
-    "session_dir": "test_scenario_executor_output/screen_recordings/tdm_run_001_20260627_120000",
-    "screenshots_dir": "test_scenario_executor_output/screen_recordings/tdm_run_001_20260627_120000/screenshots",
-    "video_path": "test_scenario_executor_output/screen_recordings/tdm_run_001_20260627_120000/screen.mp4",
-    "manifest_path": "test_scenario_executor_output/screen_recordings/tdm_run_001_20260627_120000/manifest.json"
+    "session_dir": "test_scenario_executor_output/tdm_run_001_20260627_120000",
+    "screenshots_dir": "test_scenario_executor_output/tdm_run_001_20260627_120000/screen_recording/screenshots",
+    "video_path": "test_scenario_executor_output/tdm_run_001_20260627_120000/screen_recording/screen.mp4",
+    "manifest_path": "test_scenario_executor_output/tdm_run_001_20260627_120000/manifest.json"
   }
 }
 ```
@@ -160,7 +176,7 @@ POST /input/record/stop
 }
 ```
 
-입력 기록 JSON은 `test_scenario_executor_output/input_recordings/`에 저장됩니다.
+입력 기록 JSON은 세션 폴더의 `input_recording/input.json`에 저장됩니다.
 
 ## 화면 녹화
 
@@ -397,19 +413,19 @@ Invoke-RestMethod `
   -Uri "http://127.0.0.1:8765/player/play-file" `
   -Method Post `
   -ContentType "application/json" `
-  -Body '{"path":"test_scenario_executor_output/input_recordings/local_test_001.json"}'
+  -Body '{"path":"test_scenario_executor_output/local_test_001_20260627_120000/input_recording/input.json"}'
 ```
 
 cmd:
 
 ```cmd
-curl.exe -X POST http://127.0.0.1:8765/player/play-file -H "Content-Type: application/json" -d "{\"path\":\"test_scenario_executor_output/input_recordings/local_test_001.json\"}"
+curl.exe -X POST http://127.0.0.1:8765/player/play-file -H "Content-Type: application/json" -d "{\"path\":\"test_scenario_executor_output/local_test_001_20260627_120000/input_recording/input.json\"}"
 ```
 
 로컬 커맨드:
 
 ```powershell
-python -m test_scenario_executor.local_runner player-file test_scenario_executor_output/input_recordings/local_test_001.json
+python -m test_scenario_executor.local_runner player-file test_scenario_executor_output/local_test_001_20260627_120000/input_recording/input.json
 ```
 
 ### `POST /player/stop`
@@ -435,13 +451,13 @@ curl.exe -X POST http://127.0.0.1:8765/player/stop
 PowerShell:
 
 ```powershell
-Get-ChildItem test_scenario_executor_output\input_recordings
-Get-ChildItem test_scenario_executor_output\screen_recordings
+Get-ChildItem test_scenario_executor_output
+Get-ChildItem test_scenario_executor_output\local_test_001_20260627_120000
 ```
 
 cmd:
 
 ```cmd
-dir test_scenario_executor_output\input_recordings
-dir test_scenario_executor_output\screen_recordings
+dir test_scenario_executor_output
+dir test_scenario_executor_output\local_test_001_20260627_120000
 ```

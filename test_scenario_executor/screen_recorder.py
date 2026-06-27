@@ -15,6 +15,8 @@ import cv2
 import mss
 import numpy as np
 
+from .session_paths import create_session_dir, session_paths, utc_now_iso, write_manifest
+
 
 class ScreenRecorder:
     def __init__(
@@ -33,6 +35,7 @@ class ScreenRecorder:
         self._manifest_path: Path | None = None
         self._frame_count = 0
         self._started_at = 0.0
+        self._test_started_at: str | None = None
         self._meta: dict[str, Any] = {}
         self._callback_queue: queue.Queue[Any] = queue.Queue(maxsize=300)
         self._callback_thread: threading.Thread | None = None
@@ -50,13 +53,20 @@ class ScreenRecorder:
             "manifest_path": str(self._manifest_path) if self._manifest_path else None,
         }
 
-    def prepare(self, session_id: str) -> dict[str, str | None]:
-        safe_id = "".join(c if c.isalnum() or c in "-_." else "_" for c in session_id)
-        stamped = f"{safe_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        self._session_dir = self.output_root / stamped
-        self._screenshots_dir = self._session_dir / "screenshots"
-        self._video_path = self._session_dir / "screen.mp4"
-        self._manifest_path = self._session_dir / "manifest.json"
+    def prepare(
+        self,
+        session_id: str,
+        session_dir: str | Path | None = None,
+        test_started_at: str | None = None,
+    ) -> dict[str, str | None]:
+        self._test_started_at = test_started_at or utc_now_iso()
+        self._session_dir = Path(session_dir) if session_dir else create_session_dir(
+            session_id, self.output_root, self._test_started_at
+        )
+        paths = session_paths(self._session_dir)
+        self._screenshots_dir = paths["screenshots_dir"]
+        self._video_path = paths["video_path"]
+        self._manifest_path = paths["manifest_path"]
         self._screenshots_dir.mkdir(parents=True, exist_ok=True)
         return self.locations
 
@@ -75,6 +85,7 @@ class ScreenRecorder:
         self._meta = {
             "schema_version": "1.0",
             "session_id": session_id,
+            "test_started_at": self._test_started_at or utc_now_iso(),
             "fps": self.fps,
             "started_at": datetime.now(timezone.utc).isoformat(),
             "locations": self.locations,
@@ -99,10 +110,17 @@ class ScreenRecorder:
                         if not writer.isOpened():
                             raise RuntimeError(f"Could not open video writer: {self._video_path}")
 
-                    frame_path = self._screenshots_dir / f"frame_{self._frame_count:06d}.png"
+                    captured_at = datetime.now(timezone.utc)
+                    timestamp = captured_at.strftime("%Y%m%d_%H%M%S_%f")
+                    frame_path = (
+                        self._screenshots_dir
+                        / f"screenshot_{timestamp}_{self._frame_count:06d}.png"
+                    )
                     cv2.imwrite(str(frame_path), frame)
                     writer.write(frame)
-                    self._notify_screenshot(session_id, frame_path, self._frame_count)
+                    self._notify_screenshot(
+                        session_id, frame_path, self._frame_count, captured_at
+                    )
                     self._frame_count += 1
 
                     next_frame_at += frame_interval
@@ -133,13 +151,17 @@ class ScreenRecorder:
             "frame_count": self._frame_count,
             "locations": self.locations,
         }
-        if self._manifest_path:
-            self._manifest_path.parent.mkdir(parents=True, exist_ok=True)
-            with self._manifest_path.open("w", encoding="utf-8") as f:
-                json.dump(manifest, f, indent=2, ensure_ascii=False)
+        if self._session_dir:
+            write_manifest(self._session_dir, manifest)
         return manifest
 
-    def _notify_screenshot(self, session_id: str, frame_path: Path, frame_index: int) -> None:
+    def _notify_screenshot(
+        self,
+        session_id: str,
+        frame_path: Path,
+        frame_index: int,
+        captured_at: datetime,
+    ) -> None:
         if not self.screenshot_callback_url:
             return
         elapsed = time.perf_counter() - self._started_at if self._started_at else 0.0
@@ -148,7 +170,7 @@ class ScreenRecorder:
             "session_id": session_id,
             "frame_index": frame_index,
             "t": round(elapsed, 4),
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": captured_at.isoformat(),
             "screenshot_path": str(frame_path),
             "locations": self.locations,
         }
