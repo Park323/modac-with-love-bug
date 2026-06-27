@@ -10,7 +10,7 @@ from manager.play_real import RealPlayModule
 from manager.capture_real import RealCaptureModule
 from manager.runner import RunController
 from manager.control.dialog import pick_json_file
-from manager.recorder_session import RecordSession
+from manager.recorder_session import RecordSession, RecorderStartError
 
 _UI_DIR = Path(__file__).resolve().parents[2] / "ui"
 
@@ -58,6 +58,8 @@ def record_start(req: RecordStartRequest):
         raise HTTPException(status_code=409, detail="run in progress")
     try:
         recorder.start(req.duration_sec)
+    except RecorderStartError:
+        raise HTTPException(status_code=503, detail="recorder failed to start")
     except RuntimeError:
         raise HTTPException(status_code=409, detail="already recording")
     return {"state": recorder.status()["state"]}

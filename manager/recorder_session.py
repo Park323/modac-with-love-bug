@@ -30,6 +30,10 @@ from test_scenario_executor.core.session_paths import (
 )
 
 
+class RecorderStartError(RuntimeError):
+    """Raised when the recorder process fails to become ready within the startup timeout."""
+
+
 class RecordSession:
     """Single-session input recording controller."""
 
@@ -96,6 +100,10 @@ class RecordSession:
             recorder = self._factory(self._backend, self._sample_hz)
             self._recorder = recorder
 
+            # Set state to "recording" now so status() is consistent during
+            # the startup-poll window (FIX B: avoids stale prior-state bleed).
+            self._state = "recording"
+
         # Spawn recorder thread OUTSIDE the lock (start() blocks).
         rec_thread = threading.Thread(target=recorder.start, daemon=True, name="recorder-start")
         rec_thread.start()
@@ -111,7 +119,7 @@ class RecordSession:
             with self._lock:
                 self._state = "error"
                 self._error = msg
-            raise RuntimeError(msg)
+            raise RecorderStartError(msg)
 
         with self._lock:
             self._rec_thread = rec_thread
