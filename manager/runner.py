@@ -23,13 +23,13 @@ class RunController:
         self._error: str | None = None
 
     def start(self, path: str, repeat: int) -> None:
-        if self._running:
-            raise RuntimeError("already running")
         if repeat <= 0:
             repeat = 1
-        events = ScenarioReader.read(path)  # 실패 시 호출자에게 전파
+        events = ScenarioReader.read(path)  # 락 밖: 실패 시 호출자 전파, 상태 변경 없음
 
         with self._lock:
+            if self._running:
+                raise RuntimeError("already running")
             self._running = True
             self._state = "running"
             self._repeat = repeat
@@ -43,15 +43,18 @@ class RunController:
         self._thread.start()
 
     def _run(self, events: list[dict], repeat: int) -> None:
+        stopped_early = False
         try:
             self._clock.start()
             self._play.begin(self._clock)
             count = 0
             for r in range(repeat):
                 if not self._running:
+                    stopped_early = True
                     break
                 for ev in events:
                     if not self._running:
+                        stopped_early = True
                         break
                     item = InputItem(key=str(ev.get("type", "")),
                                      action="", raw=ev)
@@ -60,9 +63,11 @@ class RunController:
                     with self._lock:
                         self._repeat_index = r + 1
                         self._item_index = count
+                if stopped_early:
+                    break
             self._play.end()
             with self._lock:
-                self._state = "done" if self._running else "stopped"
+                self._state = "stopped" if stopped_early else "done"
         except Exception as e:  # noqa: BLE001 - 상태로 전파
             with self._lock:
                 self._state = "error"

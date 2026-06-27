@@ -126,3 +126,43 @@ def test_worker_exception_sets_error_state(tmp_path):
     st = ctrl.status()
     assert st["state"] == "error"
     assert "boom" in st["error"]
+
+
+def test_concurrent_start_only_one_runs(tmp_path):
+    class SlowPlay(RecordingPlay):
+        def dispatch(self, item):
+            super().dispatch(item)
+            import time
+            time.sleep(0.02)
+
+    play = SlowPlay()
+    ctrl = RunController(play, Clock())
+    path = _scenario(tmp_path, 100)
+    errors = []
+
+    def go():
+        try:
+            ctrl.start(path, 1)
+        except RuntimeError:
+            errors.append(1)
+
+    threads = [threading.Thread(target=go) for _ in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    try:
+        assert errors.count(1) == 4  # 1개만 성공, 4개 RuntimeError
+        assert ctrl.status()["state"] == "running"
+    finally:
+        ctrl.stop()
+        ctrl._thread.join(5.0)
+
+
+def test_full_completion_always_done(tmp_path):
+    play = RecordingPlay()
+    ctrl = RunController(play, Clock())
+    ctrl.start(_scenario(tmp_path, 3), repeat=2)
+    _wait_done(ctrl)
+    assert ctrl.status()["state"] == "done"
+    assert len(play.items) == 6
