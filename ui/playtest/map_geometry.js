@@ -18,21 +18,16 @@
     return inside;
   }
 
-  // walkable = 어떤 wall hole 안 AND 모든 object polygon 밖
+  // waypoint 허용 = walkable:true 로 표시된 통로 object 위에서만.
+  // 중앙 바닥/장애물 등 그 외 영역은 전부 클릭 불가.
   function isWalkable(mx, my, mapInfo) {
     const pt = [mx, my];
-    let inHole = false;
-    for (const wall of mapInfo.walls || []) {
-      for (const hole of wall.holes || []) {
-        if (pointInPolygon(pt, hole)) { inHole = true; break; }
-      }
-      if (inHole) break;
-    }
-    if (!inHole) return false;
     for (const obj of mapInfo.objects || []) {
-      if (obj.polygon && pointInPolygon(pt, obj.polygon)) return false;
+      if (obj.walkable === true && obj.polygon && pointInPolygon(pt, obj.polygon)) {
+        return true;
+      }
     }
-    return true;
+    return false;
   }
 
   // waypoint set → 평탄 배열 [{idx,x,y,rot}] (모듈 전달용 입력)

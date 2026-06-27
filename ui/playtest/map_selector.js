@@ -52,6 +52,12 @@ window.MapSelector = (function () {
     for (const obj of mapInfo.objects || []) {
       if (obj.polygon) drawPolygon(s(obj.polygon), "#6d7a7c", "#556062", 1);
     }
+    // 클릭 허용 통로(walkable:true)만 초록 강조 → 찍을 수 있는 곳 표시
+    for (const obj of mapInfo.objects || []) {
+      if (obj.walkable === true && obj.polygon) {
+        drawPolygon(s(obj.polygon), "rgba(46,204,113,0.38)", "rgba(39,174,96,0.95)", 1.5);
+      }
+    }
   }
 
   function drawWaypoints() {
