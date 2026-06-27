@@ -1,8 +1,8 @@
 # auto_run_action
 
-CrossFire 자율 주행 모듈. 매니저로부터 waypoints(목적지 목록)와 실시간 스크린 프레임을 받아 캐릭터를 자동으로 이동시키고, 그 과정에서 발생한 키/마우스 입력을 JSON으로 녹화한다.
+CrossFire 자율 주행 모듈. waypoints(목적지 목록)와 실시간 스크린 프레임을 받아 캐릭터를 자동으로 이동시키고, 그 과정에서 발생한 키/마우스 입력을 JSON으로 녹화.
 
-녹화된 JSON은 매니저의 `RunController`가 그대로 재생할 수 있는 시나리오 포맷이라, 한 번 녹화하면 이후엔 CV 없이 반복 재생만 해도 된다.
+녹화된 JSON은 `RunController`가 그대로 재생할 수 있는 시나리오 포맷이라, 한 번 녹화하면 이후엔 CV 없이 반복 재생도 가능.
 
 ```
 snippet → [auto_run_action] → 캐릭터 이동 + 녹화 → scenario.json
@@ -17,8 +17,8 @@ snippet → [auto_run_action] → 캐릭터 이동 + 녹화 → scenario.json
 ```
 auto_run_action/
   assets/
-    minimap_2.png       ← 기준 미니맵 (template matching용)
-    north_marker.png    ← 북쪽 마커 (방향 계산용)
+    minimap_2.png
+    north_marker.png
   radar.py       ← 미니맵 CV: frame → (x, y, yaw, score)
   locator.py     ← radar 래퍼: frame → {x, y, rot} | None  (10Hz 캐시)
   pathfinder.py  ← A*: (start, end) → 경유지 목록
