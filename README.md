@@ -91,6 +91,49 @@ frame on `/stream`); actions come back as JSON. See `modac/protocol.py`.
 | POST | `/act` | JPEG/PNG bytes → `Action` JSON |
 | WS | `/stream` | binary frame → `Action` JSON (per frame) |
 
+## Recording format & interop (`tdm_run_*.json`)
+
+The capture/injection worker records sessions as an **event stream** (schema
+`0.1`): edge-triggered `key_down`/`key_up` (with set-1 `scan` codes),
+`mouse_move {dx,dy}`, `mouse_button_{down,up}`. The model instead works in
+**per-frame `Action`s**. `modac.events` is the codec between them:
+
+```bash
+# Bot plays and saves its output in the SAME format as human recordings:
+modac-agent --adapter mock --fps 30 --record bot_run.json
+
+# Decode any recording into fixed-rate frame actions (training pairs):
+modac-convert tdm_run_001.json --fps 20
+```
+
+- `action_to_events(prev, cur, t)` — diff two frames into edge events (this is
+  also exactly what the live Windows adapter does to drive injection).
+- `events_to_actions(events, fps)` — resample a recording onto a frame grid.
+- `SessionRecorder` — writes JSON byte-compatible with `tdm_run_*.json`.
+
+The scan codes in `modac.events` and `modac.adapters.win_input` match the
+recorder's, so both sides share one vocabulary.
+
+### ⚠️ Mouse capture must use Raw Input
+
+The committed sample's `mouse_move` deltas are unusable: they were polled from
+`GetCursorPos`, but FPS games lock the cursor to screen center, so polling only
+sees the cursor snapping back (deltas cancel out — note the file's own
+`environment.note`). Keyboard events are fine; the look axis is lost.
+
+To capture real yaw/pitch, the worker must read **relative** mouse motion:
+
+| method | notes |
+|---|---|
+| **Raw Input API** (`WM_INPUT` + `RIDEV_INPUTSINK`) | standard fix; same data the game reads; works while unfocused |
+| Interception driver | kernel-level, most robust; needs a driver install |
+| read view angles from game memory | most accurate, but game-specific / fragile |
+| ~~`WH_MOUSE_LL` hook~~ | coordinate-based — fails the same way under cursor lock |
+
+Raw Input `dx/dy` are in the same "mouse count" unit as `Action.yaw/pitch` and
+as `SendInput`, so capture → action → injection round-trips with no unit
+conversion (degree conversion is only needed for sensitivity-independent angles).
+
 ## Layout
 
 ```
@@ -98,8 +141,9 @@ src/modac/
   protocol.py            # Action schema + frame encode/decode  (the contract)
   policy/                # Policy interface + RandomPolicy placeholder
   server/                # FastAPI policy server (/act, /stream)
+  events.py              # Action <-> event-stream codec (tdm_run format) + recorder
   adapters/              # EnvAdapter: mock, crossfire_windows, win_input
-  client/                # agent loop (capture → act → apply)
+  client/                # agent loop (capture → act → apply, --record)
 examples/                # MineRL reference adapter (shows retargeting)
 tests/
 ```

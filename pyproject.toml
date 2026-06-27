@@ -32,6 +32,7 @@ dev = [
 [project.scripts]
 modac-server = "modac.server.run:main"
 modac-agent = "modac.client.loop:main"
+modac-convert = "modac.events:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/modac"]
