@@ -155,6 +155,32 @@ def test_consecutive_error_cap():
     assert cap.ended == 1
 
 
+class FailingLogger:
+    def __init__(self):
+        self.stop_calls = 0
+
+    def start(self):
+        raise RuntimeError("logger boom")
+
+    def stop(self):
+        self.stop_calls += 1
+
+
+def test_logger_start_failure_is_nonfatal():
+    """A logger whose start() raises must not abort the capture→analyze→play loop."""
+    cap, play, ana = FakeCapture(), RecordingPlay(), FakeAnalysis(finish_after=3)
+    failing_log = FailingLogger()
+    ctrl = AutoRunController(cap, ana, play, Clock(), logger=failing_log, fps=1000.0)
+    ctrl.start([{"idx": 0, "x": 1, "y": 1, "rot": 0}])
+    _wait_terminal(ctrl)
+    st = ctrl.status()
+    assert st["state"] == "done"
+    assert st["dispatched"] == 3
+    assert play.ended == 1
+    assert cap.ended == 1
+    assert failing_log.stop_calls == 0   # never started → stop must NOT be called
+
+
 def test_double_start_raises():
     cap, play, ana = FakeCapture(), RecordingPlay(), FakeAnalysis(finish_after=10**9)
     ctrl = AutoRunController(cap, ana, play, Clock(), fps=1000.0)

@@ -76,7 +76,11 @@ class AutoRunController:
             self._play.begin(self._clock); began.append("play")
             self._capture.begin(self._clock); began.append("capture")
             if self._logger is not None:
-                self._logger.start(); began.append("logger")
+                try:
+                    self._logger.start(); began.append("logger")
+                except Exception as e:
+                    with self._lock:
+                        self._error = f"logger start failed (continuing without logger): {e}"
             self._analysis.set_waypoints(waypoints)
         except Exception as e:
             with self._lock:
