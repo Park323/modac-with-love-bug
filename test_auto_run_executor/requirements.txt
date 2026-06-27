@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+mss
+opencv-python
+numpy
+anthropic
