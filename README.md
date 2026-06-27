@@ -33,12 +33,14 @@ python game_qa_clone.py play scenarios\login_run.json
 ```powershell
 python game_qa_clone.py record scenarios\run.json --move-interval 0.02
 python game_qa_clone.py record scenarios\run.json --method hook
+python game_qa_clone.py record scenarios\run.json --live
 python game_qa_clone.py play scenarios\run.json --speed 1.5 --countdown 5
 ```
 
 - `--move-interval`: 마우스 이동 이벤트 저장 간격입니다. 기본값은 `0.01`초입니다.
 - `--poll-interval`: `poll` 방식의 입력 상태 확인 간격입니다. 기본값은 `0.005`초입니다.
 - `--method`: 녹화 방식입니다. 기본값은 `poll`입니다. `hook`은 마우스 휠 입력까지 잡을 수 있지만 일부 게임에서 입력이 안 잡힐 수 있습니다.
+- `--live`: 녹화되는 이벤트를 콘솔에 실시간으로 출력합니다.
 - `--speed`: 재생 속도입니다. `2.0`은 2배속, `0.5`는 절반 속도입니다.
 - `--countdown`: 재생 전 대기 시간입니다.
 

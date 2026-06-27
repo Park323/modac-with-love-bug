@@ -273,10 +273,34 @@ def scan_code_for_vk(vk: int) -> int:
     return scan
 
 
+def format_event(event: dict) -> str:
+    prefix = f"{event['t']:>9.3f}s"
+    if event["kind"] == "keyboard":
+        return (
+            f"{prefix} keyboard {event['action']:<4} "
+            f"vk={event['vk']:<3} scan={event['scan']:<3} "
+            f"extended={str(event.get('extended', False)).lower()}"
+        )
+
+    parts = [
+        prefix,
+        "mouse",
+        f"{event['action']:<10}",
+        f"x={event['x']}",
+        f"y={event['y']}",
+    ]
+    if "delta" in event:
+        parts.append(f"delta={event['delta']}")
+    if "button" in event:
+        parts.append(f"button={event['button']}")
+    return " ".join(parts)
+
+
 class Recorder:
-    def __init__(self, output: Path, move_interval: float) -> None:
+    def __init__(self, output: Path, move_interval: float, live: bool) -> None:
         self.output = output
         self.move_interval = move_interval
+        self.live = live
         self.events: list[dict] = []
         self.start = now()
         self.last_move_time = 0.0
@@ -289,6 +313,11 @@ class Recorder:
 
     def elapsed(self) -> float:
         return round(now() - self.start, 6)
+
+    def record_event(self, event: dict) -> None:
+        self.events.append(event)
+        if self.live:
+            print(format_event(event), flush=True)
 
     def run(self) -> None:
         print("Recording. Stop with Ctrl+Shift+F12.")
@@ -362,7 +391,7 @@ class Recorder:
                 self.pressed.discard(vk)
 
             if is_down or is_up:
-                self.events.append(
+                self.record_event(
                     {
                         "t": self.elapsed(),
                         "kind": "keyboard",
@@ -415,15 +444,18 @@ class Recorder:
                     event["delta"] = signed_word(int(data.mouseData))
                 if action in ("x_down", "x_up"):
                     event["button"] = high_word(int(data.mouseData))
-                self.events.append(event)
+                self.record_event(event)
         return user32.CallNextHookEx(self.mouse_hook, n_code, w_param, l_param)
 
 
 class PollingRecorder:
-    def __init__(self, output: Path, move_interval: float, poll_interval: float) -> None:
+    def __init__(
+        self, output: Path, move_interval: float, poll_interval: float, live: bool
+    ) -> None:
         self.output = output
         self.move_interval = move_interval
         self.poll_interval = poll_interval
+        self.live = live
         self.events: list[dict] = []
         self.start = now()
         self.last_move_time = 0.0
@@ -433,6 +465,11 @@ class PollingRecorder:
 
     def elapsed(self) -> float:
         return round(now() - self.start, 6)
+
+    def record_event(self, event: dict) -> None:
+        self.events.append(event)
+        if self.live:
+            print(format_event(event), flush=True)
 
     def stop_requested(self) -> bool:
         return (
@@ -487,7 +524,7 @@ class PollingRecorder:
             scan = scan_code_for_vk(vk)
             if scan == 0:
                 continue
-            self.events.append(
+            self.record_event(
                 {
                     "t": event_time,
                     "kind": "keyboard",
@@ -506,8 +543,14 @@ class PollingRecorder:
         if moved and move_due:
             self.last_move_pos = (x, y)
             self.last_move_time = event_time
-            self.events.append(
-                {"t": event_time, "kind": "mouse", "action": "move", "x": x, "y": y}
+            self.record_event(
+                {
+                    "t": event_time,
+                    "kind": "mouse",
+                    "action": "move",
+                    "x": x,
+                    "y": y,
+                }
             )
 
         for vk, (down_action, up_action, button) in MOUSE_BUTTONS.items():
@@ -524,7 +567,7 @@ class PollingRecorder:
             }
             if button:
                 event["button"] = button
-            self.events.append(event)
+            self.record_event(event)
 
 
 def normalize_position(x: int, y: int) -> tuple[int, int]:
@@ -666,6 +709,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="poll",
         help="capture method. poll works better with many games; hook can capture wheel input",
     )
+    record_parser.add_argument(
+        "--live",
+        action="store_true",
+        help="print each captured event to the console while recording",
+    )
 
     play_parser = sub.add_parser("play", help="play a scenario")
     play_parser.add_argument("input", type=Path, help="input JSON scenario path")
@@ -689,12 +737,12 @@ def main(argv: list[str] | None = None) -> int:
             if args.move_interval <= 0:
                 raise SystemExit("--move-interval must be greater than 0")
             if args.method == "hook":
-                Recorder(args.output, args.move_interval).run()
+                Recorder(args.output, args.move_interval, args.live).run()
             else:
                 if args.poll_interval <= 0:
                     raise SystemExit("--poll-interval must be greater than 0")
                 PollingRecorder(
-                    args.output, args.move_interval, args.poll_interval
+                    args.output, args.move_interval, args.poll_interval, args.live
                 ).run()
         elif args.command == "play":
             if args.speed <= 0:
