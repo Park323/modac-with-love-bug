@@ -295,7 +295,6 @@ class PollingInputRecorder:
                     }
                 )
 
-
 def record_session(
     *,
     output_path: Path,
