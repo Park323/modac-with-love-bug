@@ -55,8 +55,8 @@ class AutoRunController:
             # state is set to "stopped" by the thread after cleanup finishes
 
     def status(self) -> dict:
+        remaining = self._analysis.remaining
         with self._lock:
-            remaining = self._analysis.remaining
             return {
                 "state": self._state,
                 "wp_total": self._wp_total,
