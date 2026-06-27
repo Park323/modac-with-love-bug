@@ -138,3 +138,21 @@
 @media (max-width: 880px) {
   .map-workspace { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* 실행 모니터 로그 스택 — 높이 고정 + 스크롤 (맵 섹션이 밀려나는 것 방지) */
+.activity-list {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+/* waypoint drag-drop 재배치 */
+.waypoint-item {
+  cursor: grab;
+}
+.waypoint-item:active {
+  cursor: grabbing;
+}
+.waypoint-item.drag-over {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(31, 122, 140, 0.25);
+}

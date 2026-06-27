@@ -94,6 +94,8 @@ window.MapSelector = (function () {
     waypoints.forEach((wp, i) => {
       const div = document.createElement("div");
       div.className = "waypoint-item";
+      div.draggable = true;
+      div.dataset.index = i;
       div.innerHTML =
         '<span class="wp-num">' + (i + 1) + '</span>' +
         '<span class="wp-coords">x: ' + wp.x.toFixed(1) +
@@ -134,13 +136,23 @@ window.MapSelector = (function () {
   }
 
   function onMove(e) {
-    if (!dragging || !pending) return;
     const [cx, cy] = canvasPos(e);
-    const [pcx, pcy] = toCanvas(pending.x, pending.y);
-    currentRot = calcRot(pcx, pcy, cx, cy);
-    redraw();
-    setCoord("x: " + pending.x.toFixed(1) + "  y: " + pending.y.toFixed(1) +
-             "  rot: " + currentRot.toFixed(1) + "°", false);
+    if (dragging && pending) {
+      const [pcx, pcy] = toCanvas(pending.x, pending.y);
+      currentRot = calcRot(pcx, pcy, cx, cy);
+      redraw();
+      setCoord("x: " + pending.x.toFixed(1) + "  y: " + pending.y.toFixed(1) +
+               "  rot: " + currentRot.toFixed(1) + "°", false);
+      return;
+    }
+    // 호버: 드래그 아니어도 현재 맵 좌표 실시간 표시
+    const [mx, my] = toMap(cx, cy);
+    setCoord("x: " + mx.toFixed(1) + "  y: " + my.toFixed(1), false);
+  }
+
+  function onLeave() {
+    commit();
+    if (!dragging) setCoord("—", false);
   }
 
   function commit() {
@@ -182,7 +194,7 @@ window.MapSelector = (function () {
     canvas.addEventListener("mousedown", onDown);
     canvas.addEventListener("mousemove", onMove);
     canvas.addEventListener("mouseup", commit);
-    canvas.addEventListener("mouseleave", commit);
+    canvas.addEventListener("mouseleave", onLeave);
 
     document.querySelector("[data-copy-json]").addEventListener("click", () => {
       navigator.clipboard.writeText(JSON.stringify(scenario(), null, 2))
@@ -204,6 +216,41 @@ window.MapSelector = (function () {
       if (!btn) return;
       waypoints.splice(Number(btn.dataset.remove), 1);
       redraw(); updatePanel();
+    });
+
+    // ── waypoint 순서 drag-drop 재배치 → 맵 index도 갱신 ──
+    let dragSrc = null;
+    listEl.addEventListener("dragstart", (e) => {
+      const it = e.target.closest(".waypoint-item");
+      if (!it) return;
+      dragSrc = Number(it.dataset.index);
+      e.dataTransfer.effectAllowed = "move";
+    });
+    listEl.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      const it = e.target.closest(".waypoint-item");
+      listEl.querySelectorAll(".waypoint-item.drag-over")
+        .forEach((n) => n.classList.remove("drag-over"));
+      if (it) it.classList.add("drag-over");
+    });
+    listEl.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const it = e.target.closest(".waypoint-item");
+      listEl.querySelectorAll(".waypoint-item.drag-over")
+        .forEach((n) => n.classList.remove("drag-over"));
+      if (!it || dragSrc === null) { dragSrc = null; return; }
+      const tgt = Number(it.dataset.index);
+      if (Number.isNaN(tgt) || tgt === dragSrc) { dragSrc = null; return; }
+      const [moved] = waypoints.splice(dragSrc, 1);
+      waypoints.splice(tgt, 0, moved);
+      dragSrc = null;
+      redraw(); updatePanel();
+    });
+    listEl.addEventListener("dragend", () => {
+      dragSrc = null;
+      listEl.querySelectorAll(".waypoint-item.drag-over")
+        .forEach((n) => n.classList.remove("drag-over"));
     });
   }
 
