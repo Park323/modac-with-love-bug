@@ -13,6 +13,7 @@ dependencies = [
     "pydantic>=2.6",
     "numpy>=1.24",
     "pillow>=10.0",
+    "opencv-python-headless>=4.8",
     "httpx>=0.27",
     "websockets>=12.0",
 ]
@@ -28,11 +29,18 @@ windows = [
 dev = [
     "pytest>=8.0",
 ]
+# Training the learned minimap localizer (modac.localize_net). Heavy; install
+# only on the box that trains the model:  pip install "modac[train]"
+train = [
+    "torch>=2.2",
+    "torchvision>=0.17",
+]
 
 [project.scripts]
 modac-server = "modac.server.run:main"
 modac-agent = "modac.client.loop:main"
 modac-convert = "modac.events:main"
+modac-loc-train = "modac.localize_net.train:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/modac"]
