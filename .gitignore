@@ -20,6 +20,9 @@ docs
 .superpowers
 test_scenario_executor_output
 
+# Node
+ui/node_modules/
+
 # IDE
 .vscode/
 .vs/

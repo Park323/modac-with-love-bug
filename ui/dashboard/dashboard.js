@@ -6,6 +6,7 @@ function initDashboardPage() {
   if (!form) return;
 
   const directory = qs("#video-directory");
+  const folderPickerBtn = qs("[data-folder-picker]");
   const progress = qs("[data-progress]");
   const reportArea = qs("[data-report-area]");
   const analyzeButton = qs("[data-start-analysis]");
@@ -59,6 +60,22 @@ function initDashboardPage() {
       isAnalyzing = false;
     }, 1100);
   };
+
+  if (folderPickerBtn) {
+    if (!bridge.selectFolder) {
+      folderPickerBtn.disabled = true;
+      folderPickerBtn.title = "브릿지 미연결 — 경로를 직접 입력하세요";
+    } else {
+      folderPickerBtn.addEventListener("click", async () => {
+        try {
+          const path = await bridge.selectFolder();
+          if (path) directory.value = path;
+        } catch (err) {
+          console.warn("폴더 선택 실패", err);
+        }
+      });
+    }
+  }
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
