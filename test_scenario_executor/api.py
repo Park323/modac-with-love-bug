@@ -116,10 +116,39 @@ def _write_session_manifest(
         "paths": stringify_paths(paths),
     }
     if input_result:
-        data["input"] = input_result
+        data["input"] = _manifest_input_summary(input_result)
     if screen_result:
-        data["screen"] = screen_result
+        data["screen"] = _manifest_screen_summary(screen_result)
     return write_manifest(_active_session_dir, data)
+
+
+def _manifest_input_summary(input_result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "path": input_result.get("path"),
+        "event_count": input_result.get("event_count"),
+        "duration_sec": input_result.get("duration_sec"),
+    }
+
+
+def _manifest_screen_summary(screen_result: dict[str, Any]) -> dict[str, Any]:
+    summary = screen_result.get("summary")
+    if isinstance(summary, dict):
+        return {
+            "fps": summary.get("fps"),
+            "started_at": summary.get("started_at"),
+            "stopped_at": summary.get("stopped_at"),
+            "duration_sec": summary.get("duration_sec"),
+            "frame_count": summary.get("frame_count"),
+            "screenshot_callback_url": summary.get("screenshot_callback_url"),
+        }
+    return {
+        "fps": screen_result.get("fps"),
+        "started_at": screen_result.get("started_at"),
+        "stopped_at": screen_result.get("stopped_at"),
+        "duration_sec": screen_result.get("duration_sec"),
+        "frame_count": screen_result.get("frame_count"),
+        "screenshot_callback_url": screen_result.get("screenshot_callback_url"),
+    }
 
 
 def _start_input_recording(config: InputRecordStart) -> dict[str, Any]:
@@ -221,8 +250,8 @@ def _stop_screen_recording() -> dict[str, Any]:
     _screen_recorder.stop()
     if _screen_thread:
         _screen_thread.join(timeout=5.0)
-    manifest = _screen_recorder.stop()
-    return {"status": "saved", "manifest": manifest}
+    summary = _screen_recorder.stop()
+    return {"status": "saved", "summary": summary}
 
 
 @app.post("/test/start")

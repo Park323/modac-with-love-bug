@@ -15,12 +15,7 @@ import cv2
 import mss
 import numpy as np
 
-from ..core.session_paths import (
-    create_session_dir,
-    session_paths,
-    utc_now_iso,
-    write_manifest,
-)
+from ..core.session_paths import create_session_dir, session_paths, utc_now_iso
 
 
 class ScreenRecorder:
@@ -139,26 +134,25 @@ class ScreenRecorder:
             if writer is not None:
                 writer.release()
             self._stop_callback_worker()
-            self._write_manifest()
+            self._summary()
 
     def stop(self) -> dict[str, Any]:
         if not self._running:
-            return self._write_manifest()
+            return self._summary()
         self._running = False
-        return self._write_manifest()
+        return self._summary()
 
-    def _write_manifest(self) -> dict[str, Any]:
+    def _summary(self) -> dict[str, Any]:
         duration = time.perf_counter() - self._started_at if self._started_at else 0.0
-        manifest = {
-            **self._meta,
+        summary = {
+            "fps": self.fps,
+            "started_at": self._meta.get("started_at"),
             "stopped_at": datetime.now(timezone.utc).isoformat(),
             "duration_sec": round(duration, 4),
             "frame_count": self._frame_count,
-            "locations": self.locations,
+            "screenshot_callback_url": self.screenshot_callback_url,
         }
-        if self._session_dir:
-            write_manifest(self._session_dir, manifest)
-        return manifest
+        return summary
 
     def _notify_screenshot(
         self,
