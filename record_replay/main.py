@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from src.recorder import PollingRecorder
+from src.recorder import create_recorder
 from src.replayer import InputReplayer
 from src.detector import ScreenDetector
 
