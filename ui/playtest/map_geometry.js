@@ -43,14 +43,18 @@
     return false;
   }
 
-  // waypoint set → 평탄 배열 [{idx,x,y,rot}] (모듈 전달용 입력)
+  // waypoint set → 평탄 배열 [{idx,x,y,rot,action?}] (모듈 전달용 입력)
   function buildScenario(waypoints) {
-    return waypoints.map((wp, i) => ({
-      idx: i,
-      x: +Number(wp.x).toFixed(1),
-      y: +Number(wp.y).toFixed(1),
-      rot: +Number(wp.rot).toFixed(1),
-    }));
+    return waypoints.map((wp, i) => {
+      const item = {
+        idx: i,
+        x: +Number(wp.x).toFixed(1),
+        y: +Number(wp.y).toFixed(1),
+        rot: +Number(wp.rot).toFixed(1),
+      };
+      if (wp.action) item.action = wp.action;
+      return item;
+    });
   }
 
   return { pointInPolygon, isWalkable, buildScenario };
