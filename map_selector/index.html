@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Map Selector — Transport Ship 2.0</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>Transport Ship 2.0 — Waypoint Selector</h1>
+      <p class="hint">Click and drag on the map to place a waypoint. Drag direction = facing direction.</p>
+    </header>
+
+    <div id="main">
+      <div id="canvas-wrap">
+        <canvas id="mapCanvas"></canvas>
+        <div id="coord-display">—</div>
+      </div>
+
+      <div id="panel">
+        <div id="panel-header">
+          <h2>Waypoints</h2>
+          <div id="panel-actions">
+            <button id="copyBtn">Copy JSON</button>
+            <button id="downloadBtn">Download</button>
+            <button id="clearBtn" class="danger">Clear All</button>
+          </div>
+        </div>
+
+        <div id="waypointList"></div>
+
+        <div id="json-preview-wrap">
+          <label>JSON Output</label>
+          <pre id="jsonPreview">[]</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

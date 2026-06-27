@@ -1,0 +1,107 @@
+{
+  "schema_version": "0.1",
+  "description": "BL spawn → left flank → center → right flank → GR spawn sweep",
+  "map": "Transport Ship 2.0",
+  "mode": "TDM",
+  "waypoints": [
+    {
+      "t": null,
+      "type": null,
+      "dx": null,
+      "dy": null,
+      "key": null,
+      "scan": null,
+      "extended": null,
+      "position": { "x": 116,  "y": 261, "rot": 90  },
+      "_note": "BL spawn — starting position, facing east"
+    },
+    {
+      "t": null,
+      "type": null,
+      "dx": null,
+      "dy": null,
+      "key": null,
+      "scan": null,
+      "extended": null,
+      "position": { "x": 260,  "y": 200, "rot": 90  },
+      "_note": "North corridor left side — past obj_14, hugging top wall"
+    },
+    {
+      "t": null,
+      "type": null,
+      "dx": null,
+      "dy": null,
+      "key": null,
+      "scan": null,
+      "extended": null,
+      "position": { "x": 580,  "y": 420, "rot": 90  },
+      "_note": "Left-center — south of obj_12, past obj_10"
+    },
+    {
+      "t": null,
+      "type": null,
+      "dx": null,
+      "dy": null,
+      "key": null,
+      "scan": null,
+      "extended": null,
+      "position": { "x": 810,  "y": 310, "rot": 90  },
+      "_note": "Center-left — near obj_11, between diagonal containers"
+    },
+    {
+      "t": null,
+      "type": null,
+      "dx": null,
+      "dy": null,
+      "key": null,
+      "scan": null,
+      "extended": null,
+      "position": { "x": 990,  "y": 430, "rot": 90  },
+      "_note": "Center map — south of obj_15 diagonal container"
+    },
+    {
+      "t": null,
+      "type": null,
+      "dx": null,
+      "dy": null,
+      "key": null,
+      "scan": null,
+      "extended": null,
+      "position": { "x": 1250, "y": 260, "rot": 90  },
+      "_note": "Center-right — north of obj_8 bracket structure"
+    },
+    {
+      "t": null,
+      "type": null,
+      "dx": null,
+      "dy": null,
+      "key": null,
+      "scan": null,
+      "extended": null,
+      "position": { "x": 1500, "y": 430, "rot": 270 },
+      "_note": "Right-center — south of obj_13, facing west to check flank"
+    },
+    {
+      "t": null,
+      "type": null,
+      "dx": null,
+      "dy": null,
+      "key": null,
+      "scan": null,
+      "extended": null,
+      "position": { "x": 1750, "y": 280, "rot": 90  },
+      "_note": "GR approach — near obj_9, facing east toward GR spawn"
+    },
+    {
+      "t": null,
+      "type": null,
+      "dx": null,
+      "dy": null,
+      "key": null,
+      "scan": null,
+      "extended": null,
+      "position": { "x": 1900, "y": 300, "rot": 270 },
+      "_note": "GR spawn — end position, facing west back toward center"
+    }
+  ]
+}
