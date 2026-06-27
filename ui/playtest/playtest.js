@@ -37,6 +37,18 @@
     return st;
   }
 
+  function resetProgress() {
+    // transition 끄고 즉시 0% (슬라이드 연출 없이), 복원
+    progress.style.transition = "none";
+    progress.style.setProperty("--progress", "0%");
+    void progress.offsetWidth;  // reflow 강제 → 0% 즉시 반영
+    progress.style.transition = "";
+    setText("[data-metric-repeat]", "0 / 0");
+    setText("[data-metric-item]", "0 / 0");
+    setText("[data-metric-state]", "running");
+    setText("[data-status-text]", "running");
+  }
+
   function stopPolling() {
     if (polling) { clearInterval(polling); polling = null; }
   }
@@ -71,6 +83,7 @@
   async function startRun() {
     if (!pathInput.value) { log("JSON 먼저 선택", "warn"); return; }
     startBtn.disabled = true;
+    resetProgress();
     const res = await api.start(pathInput.value, Number(repeatInput.value));
     if (!res.ok) {
       startBtn.disabled = false;
