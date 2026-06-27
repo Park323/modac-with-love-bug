@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -9,6 +10,17 @@ from typing import Any
 
 
 EXCLUDED_MODULE_REPORTS = {"spawn_location_recognizer"}
+DEFAULT_CONTEXT_CROP_FRAMES = 1
+STAGE_REPORTS = {
+    "ui_detector": ("01_ui", "ui_detection_report.json"),
+    "kill_count_reader": ("02_kill_count", "kill_count_report.json"),
+    "notification_detector": ("03_notifications", "notification_report.json"),
+    "game_state_classifier": ("04_game_state", "game_state_report.json"),
+    "respawn_segment_detector": ("05_respawn", "respawn_segment_report.json"),
+    "global_timeline": ("07_global_timeline", "global_event_timeline.json"),
+    "qa_rule_engine": ("08_qa_rules", "qa_rule_report.json"),
+    "evidence_report_generator": ("09_evidence_report", "report.json"),
+}
 
 from build_qa_web_report import (
     build_report,
@@ -29,6 +41,102 @@ def copy_if_exists(src: Path, dst: Path) -> str | None:
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dst)
     return dst.as_posix()
+
+
+def rel_to_package(path: Path, package_root: Path) -> str:
+    return path.resolve().relative_to(package_root.resolve()).as_posix()
+
+
+def infer_video_output_dir(final_root: Path, check: dict[str, Any]) -> Path | None:
+    module_reports = (check.get("trace_links") or {}).get("module_reports", {})
+    for rel_path in module_reports.values():
+        parts = Path(str(rel_path)).parts
+        if not parts:
+            continue
+        candidate = final_root / parts[0]
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def parse_crop_dir_time(path: Path) -> float | None:
+    match = re.search(r"_t([0-9]+(?:\.[0-9]+)?)", path.name)
+    if not match:
+        return None
+    try:
+        return float(match.group(1))
+    except ValueError:
+        return None
+
+
+def nearest_crop_dirs(video_out_dir: Path, focus_time: float | None, limit: int) -> list[Path]:
+    crop_root = video_out_dir / "01_ui" / "crops"
+    if limit <= 0 or not crop_root.exists():
+        return []
+    candidates: list[tuple[float, Path]] = []
+    for path in crop_root.iterdir():
+        if not path.is_dir():
+            continue
+        crop_time = parse_crop_dir_time(path)
+        if crop_time is None:
+            continue
+        delta = abs(crop_time - float(focus_time or crop_time))
+        candidates.append((delta, path))
+    return [path for _, path in sorted(candidates, key=lambda item: (item[0], item[1].name))[:limit]]
+
+
+def package_context_crops(
+    *,
+    final_root: Path,
+    package_root: Path,
+    check: dict[str, Any],
+    focus_time: float | None,
+    max_frames: int = DEFAULT_CONTEXT_CROP_FRAMES,
+) -> list[dict[str, str]]:
+    video_out_dir = infer_video_output_dir(final_root, check)
+    if not video_out_dir:
+        return []
+
+    copied: list[dict[str, str]] = []
+    check_id = str(check["check_id"])
+    for crop_dir in nearest_crop_dirs(video_out_dir, focus_time, max_frames):
+        dst_dir = package_root / "assets" / check_id / "crops" / safe_name(crop_dir.name)
+        dst_dir.mkdir(parents=True, exist_ok=True)
+        for src in sorted(crop_dir.iterdir()):
+            if not src.is_file() or src.suffix.lower() not in {".jpg", ".jpeg", ".png"}:
+                continue
+            dst = dst_dir / safe_name(src.name)
+            shutil.copy2(src, dst)
+            copied.append(
+                {
+                    "kind": f"context_crop:{src.stem}",
+                    "type": "image",
+                    "path": rel_to_package(dst, package_root),
+                }
+            )
+    return copied
+
+
+def package_stage_reports(final_root: Path, package_root: Path, check: dict[str, Any]) -> dict[str, str]:
+    video_out_dir = infer_video_output_dir(final_root, check)
+    if not video_out_dir:
+        return {}
+
+    packaged: dict[str, str] = {}
+    check_id = str(check["check_id"])
+    for stage_name, (stage_dir, file_name) in STAGE_REPORTS.items():
+        src = video_out_dir / stage_dir / file_name
+        dst = package_root / "reports" / check_id / "stages" / f"{safe_name(stage_name)}.json"
+        copied = copy_if_exists(src, dst)
+        if copied:
+            packaged[stage_name] = rel_to_package(dst, package_root)
+
+    pipeline_src = video_out_dir / "pipeline_manifest.json"
+    pipeline_dst = package_root / "reports" / check_id / "stages" / "pipeline_manifest.json"
+    copied = copy_if_exists(pipeline_src, pipeline_dst)
+    if copied:
+        packaged["pipeline_manifest"] = rel_to_package(pipeline_dst, package_root)
+    return packaged
 
 
 def package_module_reports(final_root: Path, package_root: Path, check: dict[str, Any]) -> dict[str, str]:
@@ -77,7 +185,16 @@ def prune_for_handoff(report: dict[str, Any], final_root: Path, package_root: Pa
             cleanup_packaged_check(package_root, str(check.get("check_id")))
             continue
         packaged = dict(check)
+        context_crops = package_context_crops(
+            final_root=final_root,
+            package_root=package_root,
+            check=check,
+            focus_time=check.get("focus_time_sec"),
+        )
+        if context_crops:
+            packaged.setdefault("artifacts", []).extend(context_crops)
         packaged["packaged_module_reports"] = package_module_reports(final_root, package_root, check)
+        packaged["packaged_stage_reports"] = package_stage_reports(final_root, package_root, check)
         packaged["packaged_evidence_json"] = package_evidence_json(final_root, package_root, check)
         packaged.pop("source_video_path", None)
         checks.append(packaged)
@@ -262,8 +379,17 @@ def add_pass_materials(
                 if clip:
                     artifacts.append({"kind": "generated_clip", "type": "video", "path": clip})
         packed["focus_time_sec"] = focus_time
+        context_crops = package_context_crops(
+            final_root=final_root,
+            package_root=package_root,
+            check=check,
+            focus_time=focus_time,
+        )
+        if context_crops:
+            artifacts.extend(context_crops)
         packed["artifacts"] = artifacts
         packed["packaged_module_reports"] = package_module_reports(final_root, package_root, check)
+        packed["packaged_stage_reports"] = package_stage_reports(final_root, package_root, check)
         packed["packaged_evidence_json"] = package_evidence_json(final_root, package_root, check)
         out.append(packed)
         write_json(package_root / "data" / "pass_examples" / f"{check_id}.json", packed)
@@ -315,7 +441,9 @@ passed without mixing them into the main issue queue.
 - `data/pass_checks.json`: compact reasons/decision traces for PASS checks.
 - `data/pass_examples/*.json`: representative PASS checks with media.
 - `assets/<check_id>/`: generated or copied thumbnails, clips, full frames, and ROI images.
+- `assets/<check_id>/crops/`: UI ROI crops from the frame nearest to the check time.
 - `reports/<check_id>/`: copied module/evidence JSON needed for drill-down.
+- `reports/<check_id>/stages/`: selected 01-09 pipeline stage reports for the same video.
 
 ## Frontend Notes
 
