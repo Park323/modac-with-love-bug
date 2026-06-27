@@ -15,6 +15,12 @@ window.ManagerApi = (() => {
     status: async () => {
       const res = await fetch("/run/status");
       return res.json();
+    },
+    recordStart: (durationSec) => post("/record/start", { duration_sec: durationSec }),
+    recordStop: () => post("/record/stop"),
+    recordStatus: async () => {
+      const res = await fetch("/record/status");
+      return res.json();
     }
   };
 })();
