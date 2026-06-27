@@ -22,11 +22,11 @@ from .keys import NAME_TO_VK, scan_code_for_vk
 
 # ── tuning constants ──────────────────────────────────────────────────────────
 
-REACH_THRESHOLD_PX  = 50.0  # pixels — "close enough" to intermediate waypoint
-FINAL_REACH_PX      = 50.0  # pixels — "close enough" to final waypoint
+REACH_THRESHOLD_PX  = 30.0  # pixels — "close enough" to intermediate waypoint
+FINAL_REACH_PX      = REACH_THRESHOLD_PX  # pixels — "close enough" to final waypoint
 ROTATION_THRESH_DEG = 15.0   # degrees — "facing close enough"
-MOUSE_PX_PER_DEGREE = 46     # tune to match in-game sensitivity
-ROTATION_STEP_DEG   = 5.0    # max degrees to rotate per single call
+MOUSE_PX_PER_DEGREE = 0.4  # 46px = 30° in-game
+ROTATION_STEP_DEG   = 90.0    # max degrees to rotate per single call
 NAV_POLL_HZ         = 10     # position re-check rate while navigating
 WAYPOINT_TIMEOUT_SEC = 30.0  # max seconds to spend trying to reach one waypoint
 
@@ -207,6 +207,8 @@ class AutoNavigator:
                 continue
 
             dist = math.hypot(tx - state["x"], ty - state["y"])
+            print(f"[NAV]   pos=({state['x']:.0f},{state['y']:.0f}) rot={state['rot']:.0f}° "
+                  f"→ target=({tx:.0f},{ty:.0f}) dist={dist:.0f}px  action=FORWARD")
             if dist <= threshold:
                 return
 
@@ -219,6 +221,8 @@ class AutoNavigator:
             return
         step     = math.copysign(min(abs(delta), ROTATION_STEP_DEG), delta)
         mouse_dx = round(step * MOUSE_PX_PER_DEGREE)
+        print(f"[NAV]   rot={current_rot:.0f}° → target={target_rot:.0f}°  "
+              f"delta={delta:+.1f}°  step={step:+.1f}°  mouse_dx={mouse_dx:+d}px  action=ROTATE")
         wi.send_mouse_relative(mouse_dx, 0)
 
     def _step_forward(self, duration: float) -> None:

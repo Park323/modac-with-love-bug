@@ -312,6 +312,9 @@ class OptimizedNavigator(AutoNavigator):
                     prev_state["rot"],
                 )
 
+        last_fresh_t = time.perf_counter()
+        STALE_TIMEOUT_SEC = 2.0
+
         while self._running:
             if time.perf_counter() > deadline:
                 print(f"[NAV]   timeout heading to ({tx:.0f}, {ty:.0f})")
@@ -320,8 +323,12 @@ class OptimizedNavigator(AutoNavigator):
             raw = self._get_current_state()
             if raw is not None:
                 self._last_known_state = raw
+                last_fresh_t = time.perf_counter()
                 state = raw
             elif getattr(self, "_last_known_state", None):
+                if time.perf_counter() - last_fresh_t > STALE_TIMEOUT_SEC:
+                    print(f"[NAV]   no fresh position for {STALE_TIMEOUT_SEC}s — assuming arrived")
+                    return "ok"
                 state = self._last_known_state
             else:
                 time.sleep(0.05)
@@ -350,6 +357,7 @@ class OptimizedNavigator(AutoNavigator):
 
             dist = math.hypot(tx - state["x"], ty - state["y"])
             if dist <= threshold:
+                print(f"[NAV]   reached ({tx:.0f}, {ty:.0f})  dist={dist:.0f}px ✓")
                 return "ok"
 
             bearing = math.degrees(math.atan2(tx - state["x"], -(ty - state["y"]))) % 360
