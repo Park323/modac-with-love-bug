@@ -15,7 +15,9 @@ from manager.clock import Clock
 class AutoRunController:
     def __init__(self, capture, analysis, play, clock: Clock,
                  logger=None, fps: float = 10.0,
-                 max_consecutive_errors: int = 10) -> None:
+                 max_consecutive_errors: int = 10,
+                 countdown_sec: float = 5.0, beep_at_sec: float = 3.0,
+                 beep_hz: int = 880, beep_ms: int = 120, beeper=None) -> None:
         self._capture = capture
         self._analysis = analysis
         self._play = play
@@ -33,6 +35,12 @@ class AutoRunController:
         self._consec = 0
         self._error: str | None = None
         self._wp_total = 0
+
+        self._countdown_sec = countdown_sec
+        self._beep_at_sec = beep_at_sec
+        self._beep_hz = beep_hz
+        self._beep_ms = beep_ms
+        self._beeper = beeper
 
     def start(self, waypoints: list[dict]) -> None:
         with self._lock:
@@ -71,6 +79,12 @@ class AutoRunController:
 
     def _run(self, waypoints: list[dict]) -> None:
         began: list[str] = []
+        if not self._countdown():
+            with self._lock:
+                self._running = False
+                if self._state == "running":
+                    self._state = "stopped"
+            return
         try:
             self._clock.start()
             self._play.begin(self._clock); began.append("play")
@@ -141,6 +155,37 @@ class AutoRunController:
             if remaining <= 0:
                 return
             time.sleep(min(remaining, 0.05))
+
+    def _countdown(self) -> bool:
+        """카운트다운 대기. 마지막 beep_at_sec 구간 매초 부저.
+        stop()으로 중단되면 False. countdown_sec<=0이면 즉시 True."""
+        import math
+        if self._countdown_sec <= 0:
+            return True
+        t0 = time.perf_counter()
+        last_bucket = None
+        while True:
+            with self._lock:
+                if not self._running:
+                    return False
+            remaining = self._countdown_sec - (time.perf_counter() - t0)
+            if remaining <= 0:
+                return True
+            bucket = math.ceil(remaining)
+            if remaining <= self._beep_at_sec and bucket != last_bucket:
+                self._do_beep()
+                last_bucket = bucket
+            time.sleep(min(0.05, remaining))
+
+    def _do_beep(self) -> None:
+        try:
+            if self._beeper is not None:
+                self._beeper(self._beep_hz, self._beep_ms)
+            else:
+                import winsound
+                winsound.Beep(self._beep_hz, self._beep_ms)
+        except Exception:
+            pass
 
     def _safe_end(self, began: list[str]) -> None:
         if "logger" in began and self._logger is not None:

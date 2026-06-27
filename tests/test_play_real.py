@@ -51,3 +51,50 @@ def test_end_returns_result_per_dispatch():
     results = pm.end()
     assert len(results) == 2
     assert all(r.ok for r in results)
+
+
+def test_end_releases_held_keys(monkeypatch):
+    import manager.play_real as pr
+    dispatched = []
+
+    class FakePlayer:
+        def __init__(self, *a, **k): pass
+        def _dispatch(self, action): dispatched.append(action)
+        def stop(self): pass
+
+    monkeypatch.setattr(
+        "test_scenario_executor.playback.player.ActionPlayer", FakePlayer)
+
+    m = pr.RealPlayModule()
+    m.begin(Clock())
+    m.dispatch(InputItem(key="W", action="key_down",
+                         raw={"type": "key_down", "key": "W", "scan": 17, "extended": False}))
+    m.end()
+
+    ups = [a for a in dispatched if a.get("type") == "key_up"]
+    assert len(ups) == 1
+    assert ups[0].get("scan") == 17 or ups[0].get("key") == "W"
+
+
+def test_end_no_release_when_key_already_up(monkeypatch):
+    import manager.play_real as pr
+    dispatched = []
+
+    class FakePlayer:
+        def __init__(self, *a, **k): pass
+        def _dispatch(self, action): dispatched.append(action)
+        def stop(self): pass
+
+    monkeypatch.setattr(
+        "test_scenario_executor.playback.player.ActionPlayer", FakePlayer)
+
+    m = pr.RealPlayModule()
+    m.begin(Clock())
+    m.dispatch(InputItem(key="W", action="key_down",
+                         raw={"type": "key_down", "key": "W", "scan": 17}))
+    m.dispatch(InputItem(key="W", action="key_up",
+                         raw={"type": "key_up", "key": "W", "scan": 17}))
+    m.end()
+
+    ups = [a for a in dispatched if a.get("type") == "key_up"]
+    assert len(ups) == 1   # 명시적 key_up 1개뿐, end에서 추가 방출 없음
