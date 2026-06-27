@@ -41,6 +41,30 @@ function getIssueCount(report) {
   return report.review_summary?.shown_checks ?? getChecks(report).length;
 }
 
+function getPackagedStageReports(report) {
+  if (!Array.isArray(report.packaged_stage_reports)) return [];
+  return report.packaged_stage_reports
+    .map((stageGroup) => {
+      const reports = stageGroup && typeof stageGroup.reports === "object" && !Array.isArray(stageGroup.reports)
+        ? Object.entries(stageGroup.reports)
+            .filter(([, path]) => typeof path === "string" && path.trim())
+            .map(([name, path]) => ({ name, path }))
+        : [];
+      return {
+        videoId: stageGroup?.video_id || stageGroup?.output_dir || "stage reports",
+        outputDir: stageGroup?.output_dir || "",
+        reports
+      };
+    })
+    .filter((stageGroup) => stageGroup.reports.length);
+}
+
+function formatReportLabel(label) {
+  return String(label || "report")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 function resetResultMetrics() {
   setText("[data-metric-report]", "-");
   setText("[data-metric-files]", "-");
@@ -102,6 +126,44 @@ function renderSummary(report) {
             <span>${esc(label)}</span>
             <strong>${esc(value)}</strong>
           </div>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderPackagedStageReports(report) {
+  const stageReports = getPackagedStageReports(report);
+  const reportCount = stageReports.reduce((total, stageGroup) => total + stageGroup.reports.length, 0);
+  if (!stageReports.length) return "";
+
+  return `
+    <section class="final-report__section">
+      <div class="section-heading">
+        <h4>단계별 리포트</h4>
+        <span>${esc(stageReports.length)} videos · ${esc(reportCount)} files</span>
+      </div>
+      <div class="stage-report-list">
+        ${stageReports.map((stageGroup) => `
+          <article class="stage-report-card">
+            <div class="stage-report-card__top">
+              <strong>${esc(stageGroup.videoId)}</strong>
+              ${stageGroup.outputDir ? `<span>${esc(stageGroup.outputDir)}</span>` : ""}
+            </div>
+            <div class="stage-report-actions">
+              ${stageGroup.reports.map((stageReport) => `
+                <button
+                  class="stage-report-button"
+                  type="button"
+                  title="${esc(stageReport.path)}"
+                  data-stage-report-path="${esc(stageReport.path)}"
+                >
+                  <span>${esc(formatReportLabel(stageReport.name))}</span>
+                  <small>JSON</small>
+                </button>
+              `).join("")}
+            </div>
+          </article>
         `).join("")}
       </div>
     </section>
@@ -190,6 +252,7 @@ function renderQaReport(report, state) {
         <button class="secondary-button" type="button" data-page-next${state.page >= pageCount ? " disabled" : ""}>다음</button>
       </div>
     </section>
+    ${renderPackagedStageReports(report)}
   `;
 }
 
@@ -296,6 +359,16 @@ function mountFinalReport(reportArea, report, resultDir) {
       const params = new URLSearchParams({
         result_dir: resultDir,
         path: artifactButton.dataset.artifactPath
+      });
+      window.open(`/dashboard/artifact?${params.toString()}`, "_blank");
+      return;
+    }
+
+    const stageReportButton = event.target.closest("[data-stage-report-path]");
+    if (stageReportButton) {
+      const params = new URLSearchParams({
+        result_dir: resultDir,
+        path: stageReportButton.dataset.stageReportPath
       });
       window.open(`/dashboard/artifact?${params.toString()}`, "_blank");
     }
