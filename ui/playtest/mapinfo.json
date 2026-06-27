@@ -1659,7 +1659,8 @@
           6,
           642
         ]
-      ]
+      ],
+      "render": false
     },
     {
       "id": "corridor_right",
@@ -1681,7 +1682,8 @@
           1799,
           583
         ]
-      ]
+      ],
+      "render": false
     }
   ]
 }
