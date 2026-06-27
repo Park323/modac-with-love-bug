@@ -43,11 +43,16 @@ class RecordSession:
         sample_hz: float = 120.0,
         recorder_factory: Callable = create_input_recorder,
         output_root=OUTPUT_ROOT,
+        session_id: str = "web_input",
     ):
         self._backend = backend
         self._sample_hz = sample_hz
         self._factory = recorder_factory
         self._output_root = output_root
+        # Base session id; create_session_dir appends its own _YYYYMMDD_HHMMSS,
+        # so the saved layout matches the CLI:
+        #   OUTPUT_ROOT/<session_id>_<timestamp>/input_recording/input.json
+        self._session_id_base = session_id
 
         self._lock = threading.Lock()
         self._done_evt = threading.Event()  # set by stop(); wakes timer thread
@@ -86,10 +91,11 @@ class RecordSession:
             self._generation += 1
             gen = self._generation
 
-            # Build session directory + input_path.
+            # Build session directory + input_path. Use a clean base id;
+            # create_session_dir appends _YYYYMMDD_HHMMSS so the layout matches
+            # the CLI: OUTPUT_ROOT/<session_id>_<timestamp>/input_recording/input.json
             started_at = utc_now_iso()
-            # Use a timestamp-based session_id so each run gets its own dir.
-            session_id = f"record_{started_at.replace(':', '').replace('-', '')}"
+            session_id = self._session_id_base
             self._session_id = session_id
             session_dir = create_session_dir(session_id, self._output_root, started_at)
             paths = session_paths(session_dir)
