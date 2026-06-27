@@ -11,7 +11,9 @@
   let polling = null;
   let isRecording = false;
 
-  function log(text, tag) {
+  // Fix 2: accept optional `detail` appended via textContent so server strings
+  // never reach innerHTML.
+  function log(text, tag, detail) {
     const item = document.createElement("article");
     item.className = "activity-item";
     item.innerHTML = `
@@ -20,6 +22,9 @@
         <span class="tag">${tag || ""}</span>
       </div>
       <span>${formatTime()}</span>`;
+    if (detail != null) {
+      item.querySelector("strong").appendChild(document.createTextNode(detail));
+    }
     activity.prepend(item);
   }
 
@@ -58,6 +63,9 @@
             // Surface path via textContent to avoid injection
             const pathEl = qs("[data-rec-path]");
             pathEl.textContent = path;
+            // Reveal PlayTest shortcut link
+            const playtestLink = qs("[data-playtest-link]");
+            if (playtestLink) playtestLink.hidden = false;
           } else {
             const errMsg = st.error || "알 수 없는 오류";
             log(`오류: `, "error");
@@ -75,30 +83,40 @@
     }, 300);
   }
 
+  // Fix 1: set recording state ONLY after a confirmed ok response; wrap in
+  // try/catch so any network throw also resets the buttons — the page can never
+  // get stuck in a half-recording state.
   async function startRecording() {
     const raw = durationInput.value.trim();
     const parsed = parseFloat(raw);
     const durationSec = (raw === "" || isNaN(parsed)) ? null : parsed;
 
-    startBtn.disabled = true;
-    stopBtn.disabled = false;
-    isRecording = true;
+    startBtn.disabled = true; // prevent double-submit while request is in flight
 
-    const res = await api.recordStart(durationSec);
-    if (!res.ok) {
+    try {
+      const res = await api.recordStart(durationSec);
+      if (!res.ok) {
+        startBtn.disabled = false;
+        const detail = (res.data && res.data.detail) ? res.data.detail : String(res.status);
+        // Fix 2: pass server detail as third arg so it goes through textContent
+        log("시작 실패: ", "error", detail);
+        return;
+      }
+      // Only transition to "recording" state after confirmed success
+      stopBtn.disabled = false;
+      isRecording = true;
+      log("녹화 시작", "queued");
+      startPolling();
+    } catch (e) {
       startBtn.disabled = false;
-      stopBtn.disabled = true;
-      isRecording = false;
-      const detail = (res.data && res.data.detail) ? res.data.detail : String(res.status);
-      log(`시작 실패: ${detail}`, "error");
-      return;
+      log(`시작 중 오류: ${e}`, "error");
     }
-    log("녹화 시작", "queued");
-    startPolling();
   }
 
+  // Fix 3: remove redundant startBtn click listener; rely solely on the form
+  // submit handler which fires for both Enter-key and mouse-click on the submit
+  // button (type="submit").
   form.addEventListener("submit", (e) => { e.preventDefault(); startRecording(); });
-  startBtn.addEventListener("click", (e) => { e.preventDefault(); startRecording(); });
 
   stopBtn.addEventListener("click", async (e) => {
     e.preventDefault();
