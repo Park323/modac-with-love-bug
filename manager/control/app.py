@@ -38,7 +38,7 @@ def run_start(req: StartRequest):
         controller.start(req.path, req.repeat)
     except RuntimeError:
         raise HTTPException(status_code=409, detail="already running")
-    except (FileNotFoundError, ValueError) as e:
+    except (OSError, ValueError) as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"state": controller.status()["state"]}
 

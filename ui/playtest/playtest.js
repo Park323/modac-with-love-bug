@@ -44,12 +44,18 @@
   function startPolling() {
     stopPolling();
     polling = setInterval(async () => {
-      const st = render(await api.status());
-      if (["done", "stopped", "error"].includes(st.state)) {
+      try {
+        const st = render(await api.status());
+        if (["done", "stopped", "error"].includes(st.state)) {
+          stopPolling();
+          startBtn.disabled = false;
+          log(st.state === "error" ? `에러: ${st.error}` : `종료 (${st.state})`,
+              st.state === "error" ? "error" : "done");
+        }
+      } catch (e) {
         stopPolling();
         startBtn.disabled = false;
-        log(st.state === "error" ? `에러: ${st.error}` : `종료 (${st.state})`,
-            st.state === "error" ? "error" : "done");
+        log(`상태 조회 실패: ${e}`, "error");
       }
     }, 300);
   }

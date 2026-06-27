@@ -104,3 +104,9 @@ def test_stop_sets_stopped(client, tmp_path):
     client.post("/run/stop")
     st = _poll_until_done(client)
     assert st["state"] in ("stopped", "done")
+
+
+def test_start_directory_path_returns_400(client, tmp_path):
+    # 디렉터리 경로 → open()이 OSError 계열 → 400
+    r = client.post("/run/start", json={"path": str(tmp_path), "repeat": 1})
+    assert r.status_code == 400
