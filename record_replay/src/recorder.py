@@ -197,6 +197,10 @@ class BaseRecorder:
     def _elapsed(self) -> float:
         return round(time.perf_counter() - self._t0, 4)
 
+    def _get_position(self) -> dict | None:
+        # TODO: populate with map position data once assets/mapinfo.json is ready
+        return None
+
 
 class HookRecorder(BaseRecorder):
     backend = "hook"
@@ -278,6 +282,7 @@ class HookRecorder(BaseRecorder):
                         "key":      VK_TO_NAME.get(vk, f"0x{vk:02X}"),
                         "scan":     scan,
                         "extended": bool(data.flags & LLKHF_EXTENDED) or vk in EXTENDED_VKS,
+                        "position": self._get_position(),
                     })
         return user32.CallNextHookEx(self._keyboard_hook, n_code, w_param, l_param)
 
@@ -299,6 +304,7 @@ class HookRecorder(BaseRecorder):
                             "type": "mouse_move",
                             "dx": dx,
                             "dy": dy,
+                            "position": self._get_position(),
                         })
                 self._prev_cursor = cur
                 return user32.CallNextHookEx(self._mouse_hook, n_code, w_param, l_param)
@@ -315,9 +321,10 @@ class HookRecorder(BaseRecorder):
             if button_event:
                 event_type, button = button_event
                 self.events.append({
-                    "t":      self._elapsed(),
-                    "type":   event_type,
-                    "button": button,
+                    "t":        self._elapsed(),
+                    "type":     event_type,
+                    "button":   button,
+                    "position": self._get_position(),
                 })
             self._prev_cursor = cur
 
@@ -375,6 +382,7 @@ class PollingRecorder(BaseRecorder):
                 "key":      VK_TO_NAME.get(vk, f"0x{vk:02X}"),
                 "scan":     scan,
                 "extended": vk in EXTENDED_VKS,
+                "position": self._get_position(),
             })
 
     def _poll_mouse_buttons(self) -> None:
@@ -386,9 +394,10 @@ class PollingRecorder(BaseRecorder):
                 continue
             self._prev_buttons[vk] = pressed
             self.events.append({
-                "t":      t,
-                "type":   "mouse_button_down" if pressed else "mouse_button_up",
-                "button": name,
+                "t":        t,
+                "type":     "mouse_button_down" if pressed else "mouse_button_up",
+                "button":   name,
+                "position": self._get_position(),
             })
 
     def _poll_cursor(self) -> None:
@@ -398,8 +407,11 @@ class PollingRecorder(BaseRecorder):
             dy = cur[1] - self._prev_cursor[1]
             if dx or dy:
                 self.events.append({
-                    "t": self._elapsed(), "type": "mouse_move",
-                    "dx": dx, "dy": dy,
+                    "t":        self._elapsed(),
+                    "type":     "mouse_move",
+                    "dx":       dx,
+                    "dy":       dy,
+                    "position": self._get_position(),
                 })
         self._prev_cursor = cur
 
