@@ -1,0 +1,31 @@
+{
+  "clip": {
+    "pre_sec": 2.0,
+    "post_sec": 3.0,
+    "fps": 15.0,
+    "fourcc": "mp4v",
+    "enabled": true
+  },
+  "frame": {
+    "enabled": true,
+    "jpeg_quality": 95
+  },
+  "roi": {
+    "enabled": true,
+    "nearest_ui_max_delta_sec": 0.35,
+    "copy_existing_crops": true,
+    "crop_from_video_if_missing": true
+  },
+  "roi_by_rule": {
+    "kill_count_increment": ["top_score_bar", "kill_feed_area"],
+    "kill_death_notification": ["kill_feed_area", "hp_ac_area", "weapon_ammo_area", "crosshair"],
+    "respawn_same_space": ["hp_ac_area", "weapon_ammo_area", "crosshair"],
+    "default": ["top_score_bar", "kill_feed_area", "minimap", "hp_ac_area", "weapon_ammo_area", "crosshair"]
+  },
+  "status": {
+    "include_pass_evidence": false,
+    "include_uncertain_evidence": true,
+    "include_fail_evidence": true,
+    "include_need_review_evidence": true
+  }
+}

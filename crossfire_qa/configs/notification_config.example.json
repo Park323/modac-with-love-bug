@@ -1,0 +1,18 @@
+{
+  "class_thresholds": {
+    "kill_feed": 0.58,
+    "respawn_related": 0.55,
+    "none": 0.0,
+    "unknown": 0.0
+  },
+  "template_thresholds": {
+    "kill_feed": 0.62,
+    "respawn_related": 0.60
+  },
+  "temporal": {
+    "merge_gap_sec": 1.0,
+    "min_votes": 2,
+    "kill_signal_window_sec": 2.0,
+    "count_match_window_sec": 2.0
+  }
+}

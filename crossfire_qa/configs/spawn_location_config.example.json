@@ -1,0 +1,38 @@
+{
+  "allowed_locations": [
+    "BL Base",
+    "BL Deck",
+    "GR Base",
+    "GR Deck",
+    "A Site",
+    "B Site",
+    "Mid"
+  ],
+  "expected_spawn": "BL Base",
+  "sample_offsets_after_respawn_sec": [0.0, 0.4, 0.8],
+  "ocr": {
+    "backend": "easyocr",
+    "allowlist": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -_",
+    "min_confidence": 0.25,
+    "fuzzy_match_threshold": 0.55
+  },
+  "thresholds": {
+    "pass_threshold": 0.75,
+    "fail_threshold": 0.45,
+    "conflict_margin": 0.20,
+    "min_signal_confidence": 0.25,
+    "minimap_match_threshold": 0.50,
+    "visual_match_threshold": 0.45
+  },
+  "weights": {
+    "location_text_match": 0.40,
+    "minimap_position_match": 0.20,
+    "visual_spawn_similarity": 0.30,
+    "respawn_state_confidence": 0.10
+  },
+  "reference": {
+    "minimap_subdirs": ["minimap", "map", "minimap_refs"],
+    "visual_subdirs": ["visual", "frames", "full_frame", "spawn_view"],
+    "image_exts": [".png", ".jpg", ".jpeg", ".bmp", ".webp"]
+  }
+}

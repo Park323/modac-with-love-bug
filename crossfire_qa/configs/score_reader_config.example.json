@@ -1,0 +1,11 @@
+{
+  "description": "Coordinates are relative to the top_score_bar crop. Keep them tight around the single score digits; wider crops can include the 100 target, team labels, or timer.",
+  "score_sub_rois": {
+    "left_score": {"x": 102, "y": 8, "w": 27, "h": 23},
+    "right_score": {"x": 233, "y": 8, "w": 21, "h": 23}
+  },
+  "side_map": {
+    "left_score": "GR",
+    "right_score": "BL"
+  }
+}

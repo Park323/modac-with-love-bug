@@ -1,0 +1,20 @@
+{
+  "thresholds": {
+    "pass_confidence": 0.75,
+    "inferred_confidence": 0.50,
+    "min_signal_confidence": 0.45,
+    "max_kill_count_delay_sec": 2.0,
+    "spawn_pass_threshold": 0.75,
+    "spawn_fail_threshold": 0.45
+  },
+  "rules": {
+    "require_count_change_after_kill_notification": true,
+    "require_kill_notification_for_count_change": false,
+    "require_death_notification": true,
+    "death_notification_optional_if_absent": true,
+    "require_spawn_location_check": false,
+    "require_respawn_after_death": true,
+    "fail_on_missing_respawn": true,
+    "fail_on_death_without_respawn_segment": false
+  }
+}
