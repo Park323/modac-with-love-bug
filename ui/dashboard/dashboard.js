@@ -53,6 +53,12 @@ function initDashboardPage() {
         }
         reportArea.innerHTML = "";
         reportArea.appendChild(el);
+
+        if (bridge.readFinalReport && result.resultDir) {
+          bridge.readFinalReport(result.resultDir).then((report) => {
+            // TODO: render report card from report data
+          });
+        }
       });
     }
 

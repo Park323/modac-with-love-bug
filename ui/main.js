@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
 const { spawn } = require("child_process");
+const fs = require("fs");
 const path = require("path");
 
 const PYTHON_SCRIPT = path.join(__dirname, "..", "analyze.py");
@@ -62,6 +63,11 @@ ipcMain.handle("analyze-videos", (event, payload) =>
 );
 
 ipcMain.handle("open-analysis-result-folder", (_, folderPath) => shell.openPath(folderPath));
+
+ipcMain.handle("read-final-report", (_, resultDir) => {
+  const raw = fs.readFileSync(path.join(resultDir, "final_report.json"), "utf8");
+  return JSON.parse(raw);
+});
 
 app.whenReady().then(createWindow);
 
