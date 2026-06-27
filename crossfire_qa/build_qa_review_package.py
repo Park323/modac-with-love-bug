@@ -331,10 +331,13 @@ def main() -> None:
     parser.add_argument("--out", required=True, help="Output package directory.")
     parser.add_argument("--include-pass-details", action="store_true", help="Write compact PASS check explanations to data/pass_checks.json.")
     parser.add_argument("--pass-sample-limit-per-type", type=int, default=3, help="Representative PASS checks with media per check type.")
+    parser.add_argument("--clean", action="store_true", help="Delete the output package directory before rebuilding it.")
     args = parser.parse_args()
 
     final_root = Path(args.run_dir).expanduser().resolve()
     package_root = Path(args.out).expanduser().resolve()
+    if args.clean and package_root.exists():
+        shutil.rmtree(package_root)
     package_root.mkdir(parents=True, exist_ok=True)
 
     report = build_report(final_root, package_root)

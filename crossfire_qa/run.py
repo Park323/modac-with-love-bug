@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import re
+import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -1110,6 +1111,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-heuristics", action="store_true")
     parser.add_argument("--keep-going", action="store_true", help="Continue with the next video when a stage fails.")
     parser.add_argument("--dry-run", action="store_true", help="Write command manifests without executing stages.")
+    parser.add_argument("--clean-output", action="store_true", help="Delete the output directory before running. Use this when reusing --out for a new dataset.")
     return parser.parse_args()
 
 
@@ -1117,6 +1119,8 @@ def main() -> None:
     args = parse_args()
     dataset = Path(args.dataset).expanduser()
     out_root = Path(args.out).expanduser().resolve()
+    if args.clean_output and out_root.exists():
+        shutil.rmtree(out_root)
     out_root.mkdir(parents=True, exist_ok=True)
 
     videos = discover_videos(dataset)
