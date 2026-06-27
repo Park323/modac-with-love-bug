@@ -67,15 +67,23 @@ class BackgroundBank:
 class RadarSpec:
     """Geometry + asset paths to render a radar crop from a base map."""
 
-    map_path: str = "patched_map.png"
+    map_path: str = "assets/minimap_2.png"
+    # NOTE: ring/marker/cone assets below are still the OLD 158x168-frame HUD
+    # overlays — they do NOT fit the new 255x256 radar frame. render_map() (the
+    # map disc, what training/calibration uses) is correct; overlay_hud() needs
+    # new frame-matched ring/marker before it produces a realistic HUD.
     ring_path: str = "ring.png"
     marker_path: str = "marker.png"
-    # Ring circle, measured from ring.png alpha (158x168 canvas).
-    canvas_wh: tuple[int, int] = (158, 168)
-    center: tuple[float, float] = (78.4, 87.3)
-    radius: float = 78.8
-    zoom: tuple[float, float] = (3.0, 3.0)   # (zx, zy) base-px per radar-px (uniform)
-    base_offset_deg: float = -90.0           # patched_map: north = LEFT
+    # New high-res capture frame: crop = capture[13:269, 11:266] (255x256). Radar
+    # circle measured from ROI (28,30)-(249,252) + 17px margin; see modac.radar.
+    canvas_wh: tuple[int, int] = (255, 256)
+    center: tuple[float, float] = (127.5, 128.0)
+    radius: float = 110.8
+    # zoom & orientation calibrated against real case 13 (player at minimap_2
+    # (100,35)): a fixed-position 4-orientation x zoom search peaked decisively at
+    # base_offset 270, zoom 0.9 (NCC 0.82 vs ~0.2 for the other orientations).
+    zoom: tuple[float, float] = (1.0, 1.0)    # (zx, zy) base-px per radar-px (uniform)
+    base_offset_deg: float = 270.0           # minimap_2 portrait orientation -> north-up
     yaw_sign: float = 1.0
     ring_rot_sign: float = 1.0               # ring rotation direction (locked by round-trip)
     margin_frac: float = 0.04                # inset player from arena edge
