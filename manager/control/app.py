@@ -1,5 +1,7 @@
 import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -20,6 +22,8 @@ from manager.capture_stub import StubCaptureModule
 
 _UI_DIR = Path(__file__).resolve().parents[2] / "ui"
 _MOCK_RESULTS_DIR = _UI_DIR / "mock" / "results"
+_CROSSFIRE_QA_DIR = Path(__file__).resolve().parents[2] / "crossfire_qa"
+_QA_OUTPUT_ROOT = Path(__file__).resolve().parents[2] / "crossfire_qa_output"
 
 app = FastAPI(title="QA PlayTest Manager Control", version="0.1.0")
 
@@ -154,11 +158,46 @@ def dashboard_browse():
 
 @app.post("/dashboard/analyze")
 def dashboard_analyze(payload: DashboardAnalyzeRequest):
-    # TODO: analyze.py 연동 시 여기서 subprocess 실행
-    result_dir = payload.videoDirectory
     if os.environ.get("LOVEBUG_UI_MOCK") == "1":
-        result_dir = str(_MOCK_RESULTS_DIR)
-    return {"ok": True, "resultDir": result_dir}
+        return {"ok": True, "resultDir": str(_MOCK_RESULTS_DIR)}
+
+    video_dir = Path(payload.videoDirectory or "").expanduser().resolve()
+    if not video_dir.exists():
+        raise HTTPException(status_code=400, detail="디렉토리를 찾을 수 없습니다.")
+
+    run_output_dir = _QA_OUTPUT_ROOT / f"output_from_{video_dir.name}" / "run_output"
+    package_dir = _QA_OUTPUT_ROOT / f"output_from_{video_dir.name}" / "review_package"
+
+    run_proc = subprocess.run(
+        [
+            sys.executable,
+            str(_CROSSFIRE_QA_DIR / "run.py"),
+            "--dataset", str(video_dir),
+            "--out", str(run_output_dir),
+        ],
+        cwd=str(_CROSSFIRE_QA_DIR),
+        capture_output=True,
+        text=True,
+    )
+    if run_proc.returncode != 0:
+        raise HTTPException(status_code=500, detail=run_proc.stderr or "파이프라인 실행 실패")
+
+    pkg_proc = subprocess.run(
+        [
+            sys.executable,
+            str(_CROSSFIRE_QA_DIR / "build_qa_review_package.py"),
+            "--run-dir", str(run_output_dir),
+            "--out", str(package_dir),
+            "--clean",
+        ],
+        cwd=str(_CROSSFIRE_QA_DIR),
+        capture_output=True,
+        text=True,
+    )
+    if pkg_proc.returncode != 0:
+        raise HTTPException(status_code=500, detail=pkg_proc.stderr or "패키지 빌드 실패")
+
+    return {"ok": True, "resultDir": str(package_dir)}
 
 
 @app.post("/dashboard/package-manifest")
