@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -61,7 +62,20 @@ def package_evidence_json(final_root: Path, package_root: Path, check: dict[str,
 
 def prune_for_handoff(report: dict[str, Any], final_root: Path, package_root: Path) -> dict[str, Any]:
     checks = []
+    excluded_checks = []
     for check in report["checks"]:
+        if is_unobservable_video_tail_respawn(check, package_root):
+            excluded_checks.append(
+                {
+                    "check_id": check.get("check_id"),
+                    "result": check.get("result"),
+                    "check_type": check.get("check_type"),
+                    "reason": check.get("reason"),
+                    "exclusion_reason": "respawn_missing_at_video_tail_no_later_segment",
+                }
+            )
+            cleanup_packaged_check(package_root, str(check.get("check_id")))
+            continue
         packaged = dict(check)
         packaged["packaged_module_reports"] = package_module_reports(final_root, package_root, check)
         packaged["packaged_evidence_json"] = package_evidence_json(final_root, package_root, check)
@@ -70,19 +84,82 @@ def prune_for_handoff(report: dict[str, Any], final_root: Path, package_root: Pa
 
         write_json(package_root / "data" / "checks" / f"{check['check_id']}.json", packaged)
 
+    result_counts = Counter(c["result"] for c in checks)
+    type_counts: dict[str, Counter] = defaultdict(Counter)
+    case_counts: dict[str, Counter] = defaultdict(Counter)
+    for c in checks:
+        type_counts[str(c.get("check_type", "unknown"))][str(c.get("result", "unknown"))] += 1
+        case_counts[str(c.get("case_name", "unknown"))][str(c.get("result", "unknown"))] += 1
+    review_summary = dict(report.get("web_summary", {}))
+    review_summary.update(
+        {
+            "shown_checks": len(checks),
+            "shown_result_counts": dict(result_counts),
+            "shown_by_check_type": {k: dict(v) for k, v in sorted(type_counts.items())},
+            "shown_by_case": {k: dict(v) for k, v in sorted(case_counts.items())},
+            "excluded_checks_count": len(excluded_checks),
+        }
+    )
     return {
         "package_type": "crossfire_qa_review_package",
         "schema_version": "1.0",
-        "purpose": "Handoff package for building a QA visualization page. PASS checks and synthetic cases that passed are excluded.",
+        "purpose": "Handoff package for building a QA visualization page. PASS checks and synthetic cases that passed are excluded from the main issue queue.",
         "source_final_report": str((final_root / "final_report.json").resolve()),
         "overall_result": report.get("overall_result"),
         "summary": report.get("summary", {}),
-        "review_summary": report.get("web_summary", {}),
+        "review_summary": review_summary,
         "run_reproducibility": report.get("run_reproducibility", {}),
         "included_results": ["FAIL", "UNCERTAIN", "NEED_REVIEW"],
         "excluded_results": ["PASS"],
+        "excluded_checks": excluded_checks,
         "checks": checks,
     }
+
+
+def cleanup_packaged_check(package_root: Path, check_id: str) -> None:
+    if not check_id:
+        return
+    for path in [
+        package_root / "assets" / check_id,
+        package_root / "reports" / check_id,
+        package_root / "data" / "checks" / f"{check_id}.json",
+        package_root / "data" / "pass_examples" / f"{check_id}.json",
+    ]:
+        if path.is_dir():
+            shutil.rmtree(path)
+        elif path.exists():
+            path.unlink()
+
+
+def has_no_later_segment(value: Any) -> bool:
+    if isinstance(value, dict):
+        notes = value.get("notes")
+        if isinstance(notes, list) and "no_later_segment" in notes:
+            return True
+        return any(has_no_later_segment(v) for v in value.values())
+    if isinstance(value, list):
+        return any(has_no_later_segment(v) for v in value)
+    return False
+
+
+def is_unobservable_video_tail_respawn(check: dict[str, Any], package_root: Path) -> bool:
+    if check.get("result") != "FAIL" or check.get("check_type") != "respawn_operation_after_death":
+        return False
+    if "no respawn segment was found" not in str(check.get("reason", "")).lower():
+        return False
+    for artifact in check.get("artifacts", []) or []:
+        if artifact.get("type") != "json":
+            continue
+        path = package_root / str(artifact.get("path", ""))
+        if not path.exists():
+            continue
+        try:
+            evidence_item = load_json(path)
+        except Exception:
+            continue
+        if has_no_later_segment(evidence_item):
+            return True
+    return False
 
 
 def case_from_video_path(video_path: str | None) -> str | None:
