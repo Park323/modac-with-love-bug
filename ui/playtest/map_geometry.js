@@ -18,21 +18,29 @@
     return inside;
   }
 
-  // walkable = 어떤 wall hole 안 AND 모든 object polygon 밖
+  // 클릭 허용 판정:
+  //  1) 장애물 박스(walkable!==true object) 위 → 불가
+  //  2) 통로(walkable:true object) 위 → 가능 (상/하/좌/우 통로)
+  //  3) 바닥 hole 안 → 가능 (중앙 빈 바닥)
+  //  4) 그 외(외벽 밖) → 불가
   function isWalkable(mx, my, mapInfo) {
     const pt = [mx, my];
-    let inHole = false;
+    for (const obj of mapInfo.objects || []) {
+      if (obj.walkable !== true && obj.polygon && pointInPolygon(pt, obj.polygon)) {
+        return false;  // 장애물 박스
+      }
+    }
+    for (const obj of mapInfo.objects || []) {
+      if (obj.walkable === true && obj.polygon && pointInPolygon(pt, obj.polygon)) {
+        return true;   // 통로
+      }
+    }
     for (const wall of mapInfo.walls || []) {
       for (const hole of wall.holes || []) {
-        if (pointInPolygon(pt, hole)) { inHole = true; break; }
+        if (pointInPolygon(pt, hole)) return true;  // 중앙 바닥
       }
-      if (inHole) break;
     }
-    if (!inHole) return false;
-    for (const obj of mapInfo.objects || []) {
-      if (obj.polygon && pointInPolygon(pt, obj.polygon)) return false;
-    }
-    return true;
+    return false;
   }
 
   // waypoint set → 평탄 배열 [{idx,x,y,rot}] (모듈 전달용 입력)

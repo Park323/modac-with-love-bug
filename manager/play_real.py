@@ -28,6 +28,13 @@ class RealPlayModule(IPlayModule):
         self._clock = clock
         self._player = ActionPlayer(jitter_ms=self._jitter_ms)
         self._count = 0
+        # 재생 시작 시 커서를 화면 중심으로 1회 이동 — 매니저는 이벤트를 하나씩
+        # dispatch하므로 play_actions를 거치지 않는다. 여기서 원점을 고정한다.
+        try:
+            from test_scenario_executor.input import win_input as wi
+            wi.move_cursor_to_center()
+        except Exception:
+            pass
 
     def dispatch(self, item: InputItem) -> None:
         if self._player is None:

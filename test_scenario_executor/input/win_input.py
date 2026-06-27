@@ -28,6 +28,8 @@ MOUSEEVENTF_HWHEEL = 0x1000
 MOUSEEVENTF_ABSOLUTE = 0x8000
 MOUSEEVENTF_VIRTUALDESK = 0x4000
 
+SM_CXSCREEN = 0
+SM_CYSCREEN = 1
 SM_XVIRTUALSCREEN = 76
 SM_YVIRTUALSCREEN = 77
 SM_CXVIRTUALSCREEN = 78
@@ -120,6 +122,25 @@ def send_mouse_absolute(x: int, y: int, flags: int, data: int = 0) -> None:
         ),
     )
     user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
+
+
+def screen_center() -> tuple[int, int]:
+    """기본 모니터 중심 좌표 (cx, cy)."""
+    user32 = _user32()
+    cx = user32.GetSystemMetrics(SM_CXSCREEN) // 2
+    cy = user32.GetSystemMetrics(SM_CYSCREEN) // 2
+    return int(cx), int(cy)
+
+
+def move_cursor_to_center() -> tuple[int, int]:
+    """커서를 기본 모니터 중심으로 즉시 이동하고 (cx, cy) 반환.
+
+    마우스 입력이 상대 이동(dx/dy)으로 기록/재생되므로, Record/Play 시작 시
+    커서 원점을 항상 화면 중심으로 고정해 시작 위치에 따른 결과 차이를 없앤다.
+    """
+    cx, cy = screen_center()
+    _user32().SetCursorPos(cx, cy)
+    return cx, cy
 
 
 def send_mouse_button(flag: int, data: int = 0) -> None:

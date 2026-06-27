@@ -7,15 +7,19 @@ assert.strictEqual(pointInPolygon([5, 5], square), true, "내부 점");
 assert.strictEqual(pointInPolygon([15, 5], square), false, "외부 점(우측)");
 assert.strictEqual(pointInPolygon([-1, 5], square), false, "외부 점(좌측)");
 
-// isWalkable — 합성 맵: 큰 hole + 가운데 작은 object
+// isWalkable — 장애물 박스만 불가, 중앙 바닥/통로는 가능, 외벽 밖 불가
 const mapInfo = {
   size: { width: 100, height: 100 },
   walls: [{ holes: [[[10, 10], [90, 10], [90, 90], [10, 90]]] }],
-  objects: [{ polygon: [[40, 40], [60, 40], [60, 60], [40, 60]] }],
+  objects: [
+    { polygon: [[40, 40], [60, 40], [60, 60], [40, 60]] },                    // 장애물 박스 → 불가
+    { walkable: true, polygon: [[2, 20], [8, 20], [8, 30], [2, 30]] },        // hole 밖 통로 → 허용
+  ],
 };
-assert.strictEqual(isWalkable(50, 20, mapInfo), true, "hole 안 & object 밖");
-assert.strictEqual(isWalkable(50, 50, mapInfo), false, "object 위");
-assert.strictEqual(isWalkable(5, 5, mapInfo), false, "hole 밖(벽 띠/맵 밖)");
+assert.strictEqual(isWalkable(50, 20, mapInfo), true, "중앙 빈 바닥(hole 안) 가능");
+assert.strictEqual(isWalkable(50, 50, mapInfo), false, "장애물 박스 위는 불가");
+assert.strictEqual(isWalkable(5, 25, mapInfo), true, "hole 밖이라도 통로(walkable:true) 가능");
+assert.strictEqual(isWalkable(5, 5, mapInfo), false, "맵 밖(통로/바닥 아님) 불가");
 
 // buildScenario — 평탄 배열 [{idx,x,y,rot}], 1자리 반올림
 const out = buildScenario(
