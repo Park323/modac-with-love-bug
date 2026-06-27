@@ -8,7 +8,7 @@ Representative input/output for the MODAC system, regenerate with
 | file | what it is |
 |---|---|
 | `input_frame.png` | the frame, viewable (640×360 RGB) |
-| `input_frame.jpg` | the **exact bytes sent on the wire** (`POST /act` body), ~9.6 KB |
+| `input_frame.jpg` | the **exact bytes sent on the wire** (a binary WS `/stream` message), ~9.6 KB |
 
 The image here is from the `MockAdapter` (a stand-in for a live CrossFire
 capture — gradient + a red "target" box). Shape/contract are identical to live
@@ -17,7 +17,7 @@ play: an RGB `uint8` H×W×3 frame, JPEG-encoded for transport.
 ## OUTPUT — the action for that frame
 
 `output_action.json` — the per-frame `Action` the policy/server returns
-(this is what `POST /act` responds with):
+(this is what the server replies with per frame on the WS `/stream`):
 
 ```json
 { "forward": true, "yaw": -8.06, "pitch": -4.42, "fire": false, "weapon": 0, ... }
@@ -33,5 +33,5 @@ This is the format the capture/injection side consumes.
 ## The loop in one line
 
 ```
-input_frame.jpg  ──POST /act──▶  output_action.json  ──action_to_events──▶  events (inject)
+input_frame.jpg  ──WS /stream──▶  output_action.json  ──action_to_events──▶  events (inject)
 ```

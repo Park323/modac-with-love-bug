@@ -1,18 +1,24 @@
 """The policy server: receives a frame, returns an Action.
 
+Primary interface: the WebSocket /stream (one persistent connection, one Action
+per frame — no per-frame HTTP handshake). The REST /act is kept for debugging
+and single-shot calls.
+
 Endpoints
 ---------
+WS   /stream   -> send binary frame -> receive Action JSON (one per frame).
+                  Send a text message {"cmd": "reset"} to reset episode state.
 GET  /health   -> {"status": "ok", "frames": N}
 POST /reset    -> resets the policy's episode state
 POST /act      -> body = raw JPEG/PNG bytes, response = Action JSON
-WS   /stream   -> send binary frame, receive Action JSON (one per frame)
 
-The separate capture/injection client only needs /act (or /stream) plus the
+The separate capture/injection client only needs /stream (or /act) plus the
 Action schema in modac.protocol to integrate.
 """
 
 from __future__ import annotations
 
+import json
 import time
 
 from fastapi import FastAPI, Header, Request, WebSocket, WebSocketDisconnect
@@ -46,15 +52,29 @@ def create_app(policy: Policy) -> FastAPI:
 
     @app.websocket("/stream")
     async def stream(ws: WebSocket):
-        """Lower-overhead path for sustained high-FPS loops."""
+        """Primary path: a persistent connection, one Action per frame.
+
+        Binary message  -> a frame (JPEG/PNG) -> replies with an Action JSON.
+        Text message     -> a control command, e.g. {"cmd": "reset"}.
+        """
         await ws.accept()
+        policy.reset()  # fresh episode per connection
         try:
             while True:
-                data = await ws.receive_bytes()
-                frame = decode_frame(data)
-                action = policy.act(frame, {"recv_ts": time.time()})
-                state["frames"] += 1
-                await ws.send_json(action.model_dump())
+                msg = await ws.receive()
+                if msg["type"] == "websocket.disconnect":
+                    break
+                if msg.get("bytes") is not None:
+                    frame = decode_frame(msg["bytes"])
+                    action = policy.act(frame, {"recv_ts": time.time()})
+                    state["frames"] += 1
+                    await ws.send_json(action.model_dump())
+                elif msg.get("text") is not None:
+                    cmd = json.loads(msg["text"]).get("cmd")
+                    if cmd == "reset":
+                        policy.reset()
+                        state["frames"] = 0
+                        await ws.send_json({"status": "reset"})
         except WebSocketDisconnect:
             pass
 

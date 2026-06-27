@@ -22,7 +22,7 @@ HTTP/WebSocket API, so the model never needs to know which game it's driving.
 
 > CrossFire runs on **Windows** and is handled by a separate worker. This repo
 > is the system around the game: the API contract + policy server + a reference
-> Windows adapter they can build on (or reimplement against `POST /act`).
+> Windows adapter they can build on (or reimplement against the WS `/stream`).
 
 ## Quickstart (works on this Mac — no game needed)
 
@@ -33,8 +33,8 @@ pip install -e ".[dev]"
 # terminal 1 — policy server with the placeholder random policy
 modac-server --policy random
 
-# terminal 2 — agent loop driving the mock game
-modac-agent --adapter mock --fps 20 --max-steps 100
+# terminal 2 — agent loop driving the mock game (WebSocket by default)
+modac-agent --adapter mock --server ws://127.0.0.1:8000 --fps 20 --max-steps 100
 ```
 
 You'll see the mock adapter log the actions the server returns each frame.
@@ -44,7 +44,7 @@ You'll see the mock adapter log the actions the server returns each frame.
 ```powershell
 pip install "modac[windows]"            # dxcam, pydirectinput, mss
 modac-server --policy random            # or your model: pkg.module:ClassName
-modac-agent --adapter crossfire --fps 30
+modac-agent --adapter crossfire --server ws://<policy-host>:8000 --fps 30
 ```
 
 ## Plug in a real model
@@ -79,17 +79,21 @@ Run it: `modac-server --policy my_model:MyPolicy`
 | `reload/use` | bool | R / E |
 | `weapon` | int 0–9 | 0 = no change, 1–9 = slot |
 
-Frames go over the wire as JPEG bytes (`POST /act` body, or binary WebSocket
-frame on `/stream`); actions come back as JSON. See `modac/protocol.py`.
+Frames go over the wire as JPEG bytes (a binary WebSocket frame on `/stream`,
+or the `POST /act` body); actions come back as JSON. See `modac/protocol.py`.
 
 ## API
 
+WebSocket `/stream` is the **primary** interface — one persistent connection,
+one `Action` per frame, no per-frame HTTP handshake. REST `/act` is kept for
+debugging / single-shot calls (`modac-agent --transport http`).
+
 | method | path | in → out |
 |---|---|---|
+| **WS** | **`/stream`** | **binary frame → `Action` JSON (per frame); text `{"cmd":"reset"}` → reset** |
 | GET | `/health` | → `{status, frames}` |
 | POST | `/reset` | → resets episode state |
-| POST | `/act` | JPEG/PNG bytes → `Action` JSON |
-| WS | `/stream` | binary frame → `Action` JSON (per frame) |
+| POST | `/act` | JPEG/PNG bytes → `Action` JSON (debug) |
 
 ## Recording format & interop (`tdm_run_*.json`)
 
