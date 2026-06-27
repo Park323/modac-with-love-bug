@@ -18,14 +18,16 @@ from pathlib import Path
 from .recorder import PollingRecorder
 from .pathfinder import MapPathfinder
 from . import win_input as wi
-from .keys import NAME_TO_VK
+from .keys import NAME_TO_VK, scan_code_for_vk
 
 # ── tuning constants ──────────────────────────────────────────────────────────
 
-REACH_THRESHOLD_PX  = 15.0   # pixels — "close enough" to intermediate waypoint
-FINAL_REACH_PX      = 20.0   # pixels — "close enough" to final waypoint
+REACH_THRESHOLD_PX  = 50.0  # pixels — "close enough" to intermediate waypoint
+FINAL_REACH_PX      = 50.0  # pixels — "close enough" to final waypoint
 ROTATION_THRESH_DEG = 5.0    # degrees — "facing close enough"
 MOUSE_PX_PER_DEGREE = 0.5    # tune to match in-game sensitivity
+ROTATE_STEPS        = 10     # split each rotation into this many sub-steps
+ROTATE_STEP_SEC     = 0.005  # 5 ms between sub-steps → 50 ms total per rotation
 NAV_POLL_HZ         = 10     # position re-check rate while navigating
 WAYPOINT_TIMEOUT_SEC = 30.0  # max seconds to spend trying to reach one waypoint
 
@@ -117,19 +119,43 @@ class AutoNavigator:
     # ── position sensing (stub) ───────────────────────────────────────────────
 
     def _get_current_state(self) -> dict[str, float] | None:
-        # TODO: replace with teammate's real-time position module.
-        # Expected return: {"x": float, "y": float, "rot": float}
-        # Coordinates in the same pixel space as mapinfo.json (origin top-left).
-        #
-        # _start_state is used as the initial position until real tracking is ready.
-        return getattr(self, "_start_state", None)
+        try:
+            import cv2
+            import numpy as np
+            import importlib.util
+            from pathlib import Path as _P
+
+            if not hasattr(self, "_locate_fn"):
+                _spec = importlib.util.spec_from_file_location(
+                    "_radar", _P(__file__).parent.parent / "radar.py"
+                )
+                _mod = importlib.util.module_from_spec(_spec)
+                _spec.loader.exec_module(_mod)
+                self._locate_fn = _mod.locate
+
+            if not hasattr(self, "_sct"):
+                import mss as _mss
+                self._sct = _mss.mss()
+
+            raw = self._sct.grab(self._sct.monitors[1])
+            frame = cv2.cvtColor(np.array(raw), cv2.COLOR_BGRA2BGR)
+            x, y, yaw, _ = self._locate_fn(frame)
+            return {"x": float(x), "y": float(y), "rot": float(yaw)}
+        except Exception as e:
+            print(f"[NAV] _get_current_state failed: {e}")
+            return None
 
     # ── navigation ────────────────────────────────────────────────────────────
 
     def _navigate_to(self, target: Waypoint) -> None:
-        state = self._get_current_state()
-        if state is None:
-            print("[NAV]   _get_current_state() not implemented — waypoint skipped")
+        raw = self._get_current_state()
+        if raw is not None:
+            self._last_known_state = raw
+            state = raw
+        elif getattr(self, "_last_known_state", None):
+            state = self._last_known_state
+        else:
+            print("[NAV]   No position data — waypoint skipped")
             return
 
         if self._pathfinder is not None:
@@ -141,53 +167,62 @@ class AutoNavigator:
         else:
             path_pts = [(target.x, target.y)]
 
-        for ix, (px, py) in enumerate(path_pts):
-            if not self._running:
-                return
-            is_final  = (ix == len(path_pts) - 1)
-            threshold = FINAL_REACH_PX if is_final else REACH_THRESHOLD_PX
-            self._walk_to(px, py, threshold)
+        scan_w = scan_code_for_vk(NAME_TO_VK["W"])
+        wi.send_keyboard_scan(scan_w, False, is_up=False)
+        try:
+            for ix, (px, py) in enumerate(path_pts):
+                if not self._running:
+                    return
+                is_final  = (ix == len(path_pts) - 1)
+                threshold = FINAL_REACH_PX if is_final else REACH_THRESHOLD_PX
+                self._walk_to(px, py, threshold)
+        finally:
+            wi.send_keyboard_scan(scan_w, False, is_up=True)
 
-        state = self._get_current_state()
-        if state and self._running:
-            self._rotate_to(target.rot, state["rot"])
 
     def _walk_to(self, tx: float, ty: float, threshold: float) -> None:
-        """Move toward (tx, ty) until within threshold pixels or timeout."""
-        interval = 1.0 / NAV_POLL_HZ
+        """Steer toward (tx, ty) and wait until within threshold. W must already be held."""
         deadline = time.perf_counter() + WAYPOINT_TIMEOUT_SEC
+
+        # Rotate to segment bearing once before walking
+        init = getattr(self, "_last_known_state", None)
+        if init:
+            dx0 = tx - init["x"]
+            dy0 = ty - init["y"]
+            if math.hypot(dx0, dy0) > threshold:
+                self._rotate_to(math.degrees(math.atan2(dx0, -dy0)) % 360, init["rot"])
 
         while self._running:
             if time.perf_counter() > deadline:
                 print(f"[NAV]   timeout — could not reach ({tx:.0f}, {ty:.0f}), moving on")
                 return
 
-            state = self._get_current_state()
-            if state is None:
-                return
+            raw = self._get_current_state()
+            if raw is not None:
+                self._last_known_state = raw
+                state = raw
+            elif getattr(self, "_last_known_state", None):
+                state = self._last_known_state
+            else:
+                time.sleep(0.05)
+                continue
 
-            dx   = tx - state["x"]
-            dy   = ty - state["y"]
-            dist = math.hypot(dx, dy)
-
+            dist = math.hypot(tx - state["x"], ty - state["y"])
             if dist <= threshold:
                 return
-
-            bearing = math.degrees(math.atan2(dx, -dy)) % 360
-            self._rotate_to(bearing, state["rot"])
-            self._step_forward(interval)
-            time.sleep(interval)
 
     def _rotate_to(self, target_rot: float, current_rot: float) -> None:
         delta = (target_rot - current_rot + 180) % 360 - 180
         if abs(delta) < ROTATION_THRESH_DEG:
             return
-        mouse_dx = int(delta * MOUSE_PX_PER_DEGREE)
-        wi.send_mouse_relative(mouse_dx, 0)
-        time.sleep(0.03)
+        total_dx = delta * MOUSE_PX_PER_DEGREE
+        step_dx  = total_dx / ROTATE_STEPS
+        for _ in range(ROTATE_STEPS):
+            wi.send_mouse_relative(round(step_dx), 0)
+            time.sleep(ROTATE_STEP_SEC)
 
     def _step_forward(self, duration: float) -> None:
-        vk_w = NAME_TO_VK["W"]
-        wi.send_keyboard_vk(vk_w, is_up=False)
+        scan_w = scan_code_for_vk(NAME_TO_VK["W"])
+        wi.send_keyboard_scan(scan_w, False, is_up=False)
         time.sleep(duration)
-        wi.send_keyboard_vk(vk_w, is_up=True)
+        wi.send_keyboard_scan(scan_w, False, is_up=True)
