@@ -256,6 +256,24 @@ select {
   font-size: 12px;
 }
 
+.input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.input-row .control {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+.input-row .secondary-button {
+  flex-shrink: 0;
+  white-space: nowrap;
+  min-height: 46px;
+  padding: 0 16px;
+}
+
 .control {
   width: 100%;
   min-height: 46px;
