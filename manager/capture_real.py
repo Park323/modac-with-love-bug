@@ -26,6 +26,10 @@ class RealCaptureModule(ICaptureModule):
         self._clock = None
         self._thread: threading.Thread | None = None
         self._summary: dict | None = None
+        # 분석용 독립 grabber — recorder grab 루프 타이밍과 무관하게 매 next()마다
+        # 직접 화면을 잡아 항상 최신 프레임을 분석에 공급한다.
+        self._sct = None
+        self._monitor = None
         # 스샷 콜백(screenshot_fps)으로 push되는 분석용 프레임. 최신만 유지(드롭).
         self._frame_q: "_queue.Queue" = _queue.Queue(maxsize=1)
 
@@ -55,6 +59,14 @@ class RealCaptureModule(ICaptureModule):
     def begin(self, clock: Clock) -> None:
         self._clock = clock
         self._drain_queue()  # 재실행 전 잔류 프레임 비우기
+        # 분석용 독립 grabber 오픈(이 모듈을 쓰는 controller 스레드 전용).
+        try:
+            import mss
+            self._sct = mss.mss()
+            self._monitor = self._sct.monitors[1]
+        except Exception:
+            self._sct = None
+            self._monitor = None
         # 지연 import: 이 모듈 import 시점에 cv2/mss 강제 로드 안 함
         from test_scenario_executor.screen.recorder import ScreenRecorder
 
@@ -71,14 +83,33 @@ class RealCaptureModule(ICaptureModule):
         self._thread.start()
 
     def next(self) -> Frame:
-        # [A/B] 분석 frame 소스를 #17 이전 동작(latest_frame)으로 되돌림 — 항상
-        # 갓 잡은 최신 프레임을 반환(컨트롤러가 10fps로 폴링). 스샷 콜백 큐(묵은
-        # 프레임/지연)가 회전 미동작 원인인지 확인용. 큐 경로는 보존만.
+        # 매 호출마다 독립 grabber로 직접 화면을 잡아 항상 최신 프레임 반환
+        # (recorder grab 루프/큐 타이밍과 무관 — 회전 미동작 근본 원인 제거).
         ts = self._clock.now_ms() if self._clock is not None else 0
-        arr = self._recorder.latest_frame if self._recorder is not None else None
+        arr = self._grab()
+        if arr is None and self._recorder is not None:
+            arr = self._recorder.latest_frame  # fallback
         return Frame(timestamp_ms=ts, bgr=arr)
 
+    def _grab(self):
+        if self._sct is None or self._monitor is None:
+            return None
+        try:
+            import cv2
+            import numpy as np
+            raw = self._sct.grab(self._monitor)
+            return cv2.cvtColor(np.array(raw), cv2.COLOR_BGRA2BGR)
+        except Exception:
+            return None
+
     def end(self) -> None:
+        if self._sct is not None:
+            try:
+                self._sct.close()
+            except Exception:
+                pass
+            self._sct = None
+            self._monitor = None
         if self._recorder is None:
             return
         self._summary = self._recorder.stop()
