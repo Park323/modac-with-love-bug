@@ -20,6 +20,7 @@ class RealPlayModule(IPlayModule):
         self._player = None
         self._clock: Clock | None = None
         self._count = 0
+        self._held: dict = {}
 
     def begin(self, clock: Clock) -> None:
         # 지연 import: 이 모듈 import 시점에 win_input 강제 로드 안 함
@@ -28,6 +29,7 @@ class RealPlayModule(IPlayModule):
         self._clock = clock
         self._player = ActionPlayer(jitter_ms=self._jitter_ms)
         self._count = 0
+        self._held = {}
         # 재생 시작 시 커서를 화면 중심으로 1회 이동 — 매니저는 이벤트를 하나씩
         # dispatch하므로 play_actions를 거치지 않는다. 여기서 원점을 고정한다.
         try:
@@ -40,11 +42,24 @@ class RealPlayModule(IPlayModule):
         if self._player is None:
             raise RuntimeError("dispatch called before begin")
         action = item.raw if item.raw is not None else {}
+        t = action.get("type")
+        if t == "key_down":
+            self._held[action.get("scan") or action.get("key")] = action
+        elif t == "key_up":
+            self._held.pop(action.get("scan") or action.get("key"), None)
         self._player._dispatch(action)  # 액션 1개 즉시 실행(타이밍은 RunController)
         self._count += 1
 
     def end(self) -> list[InputResult]:
         if self._player is not None:
+            for action in list(self._held.values()):
+                up = dict(action)
+                up["type"] = "key_up"
+                try:
+                    self._player._dispatch(up)
+                except Exception:
+                    pass
+            self._held.clear()
             self._player.stop()
         ts = self._clock.now_ms() if self._clock is not None else 0
         # Real 모듈은 개별 결과를 돌려주지 않음 — 디스패치 수만 요약 결과로 반환.
