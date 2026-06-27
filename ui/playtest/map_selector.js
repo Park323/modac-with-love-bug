@@ -259,5 +259,5 @@ window.MapSelector = (function () {
     });
   }
 
-  return { init };
+  return { init, scenario };
 })();

@@ -139,10 +139,13 @@
               </div>
               <div class="panel__body">
                 <div class="wp-actions">
+                  <button class="primary-button" type="button" data-auto-start>재생 시작</button>
+                  <button class="primary-button" type="button" data-auto-stop>종료</button>
                   <button class="primary-button" type="button" data-copy-json>Copy JSON</button>
                   <button class="primary-button" type="button" data-download-json>Download</button>
                   <button class="primary-button" type="button" data-clear-waypoints>Clear All</button>
                 </div>
+                <div class="coord-display" data-auto-status>—</div>
                 <div class="waypoint-list" data-waypoint-list></div>
                 <div class="json-preview-wrap">
                   <label>JSON Output</label>
@@ -159,6 +162,7 @@
     <script src="./playtest.js"></script>
     <script src="./map_geometry.js"></script>
     <script src="./map_selector.js"></script>
-    <script>window.MapSelector.init();</script>
+    <script src="./autorun.js"></script>
+    <script>window.MapSelector.init(); window.AutoRun.init();</script>
   </body>
 </html>
