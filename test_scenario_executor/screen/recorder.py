@@ -162,18 +162,15 @@ class ScreenRecorder:
                         next_screenshot_at += screenshot_interval
 
                     if video_due:
-                        # 실시간(1x) 보장: 경과한 비디오 타임라인만큼 현재 프레임을
-                        # 채워 넣는다(grab이 video_fps보다 느리면 프레임 복제). 밀린
-                        # 프레임을 drop하면 영상이 실제보다 짧아져 재생이 빨라지므로
-                        # 여기서 backlog를 버리지 않는다.
-                        while next_video_at <= now:
-                            writer.write(frame)
-                            self._video_frame_count += 1
-                            next_video_at += video_interval
+                        writer.write(frame)
+                        self._video_frame_count += 1
+                        next_video_at += video_interval
 
                     now = time.perf_counter()
                     if next_screenshot_at <= now:
                         next_screenshot_at = now + screenshot_interval
+                    if next_video_at <= now:
+                        next_video_at = now + video_interval
         finally:
             self._running = False
             if writer is not None:

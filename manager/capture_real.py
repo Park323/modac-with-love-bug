@@ -59,14 +59,6 @@ class RealCaptureModule(ICaptureModule):
     def begin(self, clock: Clock) -> None:
         self._clock = clock
         self._drain_queue()  # 재실행 전 잔류 프레임 비우기
-        # 분석용 독립 grabber 오픈(이 모듈을 쓰는 controller 스레드 전용).
-        try:
-            import mss
-            self._sct = mss.mss()
-            self._monitor = self._sct.monitors[1]
-        except Exception:
-            self._sct = None
-            self._monitor = None
         # 지연 import: 이 모듈 import 시점에 cv2/mss 강제 로드 안 함
         from test_scenario_executor.screen.recorder import ScreenRecorder
 
@@ -83,33 +75,12 @@ class RealCaptureModule(ICaptureModule):
         self._thread.start()
 
     def next(self) -> Frame:
-        # 매 호출마다 독립 grabber로 직접 화면을 잡아 항상 최신 프레임 반환
-        # (recorder grab 루프/큐 타이밍과 무관 — 회전 미동작 근본 원인 제거).
+        # 6:24 검증된 동작: recorder가 매 grab마다 갱신하는 latest_frame을 반환.
         ts = self._clock.now_ms() if self._clock is not None else 0
-        arr = self._grab()
-        if arr is None and self._recorder is not None:
-            arr = self._recorder.latest_frame  # fallback
+        arr = self._recorder.latest_frame if self._recorder is not None else None
         return Frame(timestamp_ms=ts, bgr=arr)
 
-    def _grab(self):
-        if self._sct is None or self._monitor is None:
-            return None
-        try:
-            import cv2
-            import numpy as np
-            raw = self._sct.grab(self._monitor)
-            return cv2.cvtColor(np.array(raw), cv2.COLOR_BGRA2BGR)
-        except Exception:
-            return None
-
     def end(self) -> None:
-        if self._sct is not None:
-            try:
-                self._sct.close()
-            except Exception:
-                pass
-            self._sct = None
-            self._monitor = None
         if self._recorder is None:
             return
         self._summary = self._recorder.stop()
