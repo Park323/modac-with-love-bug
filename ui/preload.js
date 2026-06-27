@@ -1,6 +1,8 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("LovebugBridge", {
-  selectFolder: () => ipcRenderer.invoke("select-folder"),
-  analyzeVideos: (payload) => ipcRenderer.invoke("analyze-videos", payload)
+  selectRawDataFolder: () => ipcRenderer.invoke("select-raw-data-folder"),
+  analyzeVideos: (payload) => ipcRenderer.invoke("analyze-videos", payload),
+  onAnalysisComplete: (cb) => ipcRenderer.on("analysis-complete", (_, data) => cb(data)),
+  openAnalysisResultFolder: (folderPath) => ipcRenderer.invoke("open-analysis-result-folder", folderPath)
 });

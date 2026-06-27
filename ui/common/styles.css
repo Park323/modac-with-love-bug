@@ -478,6 +478,16 @@ select.control {
   margin-top: 14px;
 }
 
+.result-dir {
+  margin: 6px 0 0;
+  color: var(--faint);
+  font-size: 11px;
+  font-family: ui-monospace, "SFMono-Regular", monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 860px) {
   .page-head,
   .workspace {
