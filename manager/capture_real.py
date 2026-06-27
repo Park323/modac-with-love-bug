@@ -43,8 +43,18 @@ class RealCaptureModule(ICaptureModule):
             except _queue.Full:
                 pass
 
+    def _drain_queue(self) -> None:
+        """이전 실행의 잔류 프레임 제거 — 다음 실행 첫 분석이 stale 프레임에
+        오염되지 않게 한다(반복 실행 시 마우스 회전 오작동 방지)."""
+        try:
+            while True:
+                self._frame_q.get_nowait()
+        except _queue.Empty:
+            pass
+
     def begin(self, clock: Clock) -> None:
         self._clock = clock
+        self._drain_queue()  # 재실행 전 잔류 프레임 비우기
         # 지연 import: 이 모듈 import 시점에 cv2/mss 강제 로드 안 함
         from test_scenario_executor.screen.recorder import ScreenRecorder
 

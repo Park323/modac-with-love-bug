@@ -30,11 +30,15 @@ class AutoRunAnalysis(IAnalysisModule):
 
         position = get_position(frame.bgr)
         if position is None:
+            print("[autorun] pos=None (detection failed)")  # [임시] 진단 로깅
             return []
 
         waypoints = self._wps if not self._injected else None
         self._injected = True
         event = next_event(position, waypoints)
+        # [임시] 진단 로깅 — run마다 rot/event/잔여 wp 추적(마우스 회전 원인 격리)
+        print(f"[autorun] pos=({position.get('x'):.0f},{position.get('y'):.0f},"
+              f"rot={position.get('rot'):.0f}) remaining={len(self._wps)} event={event}")
         if event is None:
             return []
         return [InputItem(key=event.get("key", ""),
