@@ -16,10 +16,16 @@ from __future__ import annotations
 
 import threading
 import time
+import winsound
 from pathlib import Path
 from typing import Callable
 
 import numpy as np
+
+COUNTDOWN_SEC   = 5      # total seconds before navigation starts
+BEEP_START_SEC  = 3      # beep begins this many seconds before start
+BEEP_FREQ_HZ    = 880
+BEEP_DURATION_MS = 120
 
 from .locator import Locator
 from .navigator import OptimizedNavigator, Waypoint
@@ -104,9 +110,29 @@ class AutoRunAction:
 
     # ── internal ──────────────────────────────────────────────────────────────
 
+    def _countdown(self) -> bool:
+        """5초 카운트다운. 마지막 3초는 매초 beep. stop() 호출 시 False 반환."""
+        print(f"[NAV] Starting in {COUNTDOWN_SEC}s ...")
+        t0 = time.perf_counter()
+        while True:
+            elapsed  = time.perf_counter() - t0
+            remaining = COUNTDOWN_SEC - elapsed
+            if remaining <= 0:
+                return True
+            with self._lock:
+                if self._state != "running":
+                    return False
+            if remaining <= BEEP_START_SEC:
+                winsound.Beep(BEEP_FREQ_HZ, BEEP_DURATION_MS)
+            time.sleep(1.0)
+
     def _run(self, nav: OptimizedNavigator, wps: list[Waypoint],
              output_path: str, session_id: str) -> None:
         try:
+            if not self._countdown():
+                with self._lock:
+                    self._state = "stopped"
+                return
             nav.run(wps, output_path, session_id)
             with self._lock:
                 if self._state == "running":
