@@ -1,5 +1,7 @@
 import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -15,8 +17,12 @@ from manager.runner import RunController
 from manager.control.dialog import pick_json_file, pick_directory
 from manager.recorder_session import RecordSession, RecorderStartError
 
-_UI_DIR = Path(__file__).resolve().parents[2] / "ui"
+_ROOT_DIR = Path(__file__).resolve().parents[2]
+_UI_DIR = _ROOT_DIR / "ui"
 _MOCK_RESULTS_DIR = _UI_DIR / "mock" / "results"
+_CROSSFIRE_QA_DIR = _ROOT_DIR / "crossfire_qa"
+_QA_INTERMEDIATE_DIR = _ROOT_DIR / "outputs" / "final_qa"
+_QA_PACKAGE_DIR = _ROOT_DIR / "outputs" / "qa_review_package"
 
 app = FastAPI(title="QA PlayTest Manager Control", version="0.1.0")
 
@@ -131,11 +137,45 @@ def dashboard_browse():
 
 @app.post("/dashboard/analyze")
 def dashboard_analyze(payload: DashboardAnalyzeRequest):
-    # TODO: analyze.py 연동 시 여기서 subprocess 실행
-    result_dir = payload.videoDirectory
     if os.environ.get("LOVEBUG_UI_MOCK") == "1":
-        result_dir = str(_MOCK_RESULTS_DIR)
-    return {"ok": True, "resultDir": result_dir}
+        return {"ok": True, "resultDir": str(_MOCK_RESULTS_DIR)}
+
+    video_dir = payload.videoDirectory
+    if not video_dir or not Path(video_dir).exists():
+        raise HTTPException(status_code=400, detail="videoDirectory가 존재하지 않습니다.")
+
+    py = sys.executable
+
+    # 1단계: 영상 분석 → outputs/final_qa/
+    run_cmd = [
+        py, str(_CROSSFIRE_QA_DIR / "run.py"),
+        "--dataset", video_dir,
+        "--out", str(_QA_INTERMEDIATE_DIR),
+        "--score-backend", "template",
+        "--keep-going",
+    ]
+    result = subprocess.run(run_cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise HTTPException(
+            status_code=500,
+            detail=f"crossfire_qa/run.py 실패:\n{result.stderr[-2000:]}"
+        )
+
+    # 2단계: 리뷰 패키지 생성 → outputs/qa_review_package/
+    pkg_cmd = [
+        py, str(_CROSSFIRE_QA_DIR / "build_qa_review_package.py"),
+        "--run-dir", str(_QA_INTERMEDIATE_DIR),
+        "--out", str(_QA_PACKAGE_DIR),
+        "--include-pass-details",
+    ]
+    result = subprocess.run(pkg_cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise HTTPException(
+            status_code=500,
+            detail=f"build_qa_review_package.py 실패:\n{result.stderr[-2000:]}"
+        )
+
+    return {"ok": True, "resultDir": str(_QA_PACKAGE_DIR)}
 
 
 @app.post("/dashboard/package-manifest")
