@@ -3,7 +3,8 @@
     "allow": [
       "PowerShell(Get-ChildItem \"c:\\\\Users\\\\tina\\\\Documents\\\\modacthon\\\\v1\" -Recurse | Where-Object { -not $_.PSIsContainer } | Select-Object FullName)",
       "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\tina\\\\Documents\\\\modacthon\\\\record_replay\")",
-      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\tina\\\\Documents\\\\modacthon\\\\record_replay\\\\src\")"
+      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\tina\\\\Documents\\\\modacthon\\\\record_replay\\\\src\")",
+      "Bash(git check-ignore *)"
     ]
   }
 }
