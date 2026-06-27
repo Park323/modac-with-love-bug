@@ -151,8 +151,9 @@ window.MapSelector = (function () {
   }
 
   function onLeave() {
+    const added = dragging && pending;   // commit will add a waypoint
     commit();
-    if (!dragging) setCoord("—", false);
+    if (!added) setCoord("—", false);    // 호버만 하다 나간 경우에만 readout 비움
   }
 
   function commit() {
