@@ -321,6 +321,14 @@ def to_output(waypoints: list[PlannedWaypoint]) -> list[dict]:
     return [wp.to_output() for wp in waypoints]
 
 
+def scenario_to_waypoints(scenario: str) -> list[dict]:
+    """Convert a natural-language scenario string into [{idx, x, y}, ...]."""
+    print(f"[scenario_to_waypoints] input: {scenario!r}", flush=True)
+    output = to_output(plan_waypoints(scenario))
+    print(f"[scenario_to_waypoints] output: {output}", flush=True)
+    return output
+
+
 def save_plan(waypoints: list[PlannedWaypoint], path: str | Path) -> None:
     """Write the required output array — [{idx, x, y}, ...] — as JSON."""
     Path(path).write_text(
