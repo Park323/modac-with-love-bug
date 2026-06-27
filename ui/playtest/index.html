@@ -107,11 +107,14 @@
         </section>
 
         <section class="add-scenario">
-          <button class="primary-button" type="button" data-add-scenario aria-expanded="false">
-            시나리오 추가하기 <span data-toggle-caret>▾</span>
-          </button>
+          <div class="page-head">
+            <div>
+              <p class="eyebrow">시나리오 추가</p>
+              <h2 class="page-title">맵에서 waypoint를 찍어 시나리오를 만드세요.</h2>
+            </div>
+          </div>
 
-          <div class="map-workspace" data-map-section hidden>
+          <div class="map-workspace" data-map-section>
             <section class="panel">
               <div class="panel__header">
                 <div>
@@ -156,23 +159,6 @@
     <script src="./playtest.js"></script>
     <script src="./map_geometry.js"></script>
     <script src="./map_selector.js"></script>
-    <script>
-      (function () {
-        const btn = document.querySelector("[data-add-scenario]");
-        const section = document.querySelector("[data-map-section]");
-        const caret = document.querySelector("[data-toggle-caret]");
-        btn.addEventListener("click", () => {
-          const show = section.hasAttribute("hidden");
-          if (show) {
-            section.removeAttribute("hidden");
-            window.MapSelector.init();   // lazy: 펼쳐 폭 잡힌 뒤 1회
-          } else {
-            section.setAttribute("hidden", "");
-          }
-          btn.setAttribute("aria-expanded", String(show));
-          caret.textContent = show ? "▴" : "▾";
-        });
-      })();
-    </script>
+    <script>window.MapSelector.init();</script>
   </body>
 </html>
