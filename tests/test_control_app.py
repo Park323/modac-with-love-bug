@@ -1,10 +1,47 @@
 import json
+import time
+import threading
 
 import pytest
 from fastapi.testclient import TestClient
 
 from manager.control import app as app_module
 
+
+# ---------------------------------------------------------------------------
+# Fake recorder — injected via reset_recorder() so NO real OS input is used.
+# ---------------------------------------------------------------------------
+
+class _FakeRec:
+    def __init__(self, events=2):
+        self._running = False
+        self._n = events
+
+    @property
+    def is_recording(self):
+        return self._running
+
+    def start(self):
+        self._running = True
+        while self._running:
+            time.sleep(0.005)
+
+    def stop(self):
+        self._running = False
+
+    def save(self, path, session_id="session"):
+        return {"session": {"event_count": self._n, "duration_sec": 0.5}}
+
+
+def _fake_factory(events=2):
+    def make(backend, sample_hz):
+        return _FakeRec(events)
+    return make
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
 
 @pytest.fixture
 def client():
@@ -13,8 +50,9 @@ def client():
 
 @pytest.fixture(autouse=True)
 def reset_controller():
-    # 각 테스트마다 깨끗한 컨트롤러
+    # 각 테스트마다 깨끗한 컨트롤러 + 가짜 recorder (실제 OS 입력 없음)
     app_module.reset_controller()
+    app_module.reset_recorder(_fake_factory())
     yield
 
 
@@ -110,3 +148,66 @@ def test_start_directory_path_returns_400(client, tmp_path):
     # 디렉터리 경로 → open()이 OSError 계열 → 400
     r = client.post("/run/start", json={"path": str(tmp_path), "repeat": 1})
     assert r.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# /record/* endpoint tests
+# ---------------------------------------------------------------------------
+
+def test_record_start_stop_cycle(client):
+    r = client.post("/record/start", json={"duration_sec": None})
+    assert r.status_code == 200
+    assert r.json()["state"] == "recording"
+
+    st = client.get("/record/status").json()
+    assert st["state"] == "recording"
+
+    r2 = client.post("/record/stop")
+    assert r2.status_code == 200
+    data = r2.json()
+    assert data["state"] == "done"
+    assert data["event_count"] == 2
+
+
+def test_record_start_refused_while_run_active(client, tmp_path):
+    from manager.clock import Clock
+    from manager.runner import RunController
+    from manager.play_stub import StubPlayModule
+
+    entered = threading.Event()
+    gate = threading.Event()
+
+    class BlockingPlay(StubPlayModule):
+        def dispatch(self, item):
+            entered.set()
+            gate.wait(2.0)
+            super().dispatch(item)
+
+    app_module.controller = RunController(BlockingPlay(), Clock())
+    path = _scenario(tmp_path, 5)
+    try:
+        r1 = client.post("/run/start", json={"path": path, "repeat": 1})
+        assert r1.status_code == 200
+        assert entered.wait(2.0)
+        r2 = client.post("/record/start", json={"duration_sec": None})
+        assert r2.status_code == 409
+    finally:
+        gate.set()
+        app_module.controller.stop()
+        for _ in range(200):
+            if app_module.controller.status()["state"] in ("done", "stopped", "error"):
+                break
+            time.sleep(0.01)
+
+
+def test_run_start_refused_while_recording(client, tmp_path):
+    try:
+        r = client.post("/record/start", json={"duration_sec": None})
+        assert r.status_code == 200
+        assert r.json()["state"] == "recording"
+
+        path = _scenario(tmp_path, 5)
+        r2 = client.post("/run/start", json={"path": path, "repeat": 1})
+        assert r2.status_code == 409
+    finally:
+        client.post("/record/stop")

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>lovebug · PlayTest</title>
     <link rel="stylesheet" href="../common/styles.css">
+    <link rel="stylesheet" href="./map_selector.css">
   </head>
   <body>
     <div class="app-shell">
@@ -18,9 +19,9 @@
             </div>
           </div>
           <nav class="nav" aria-label="lovebug 화면 이동">
-            <a class="nav__link" href="../trigger/">Trigger</a>
-            <a class="nav__link" href="../dashboard/">Dashboard</a>
+            <a class="nav__link" href="../record/">Record</a>
             <a class="nav__link" href="../playtest/" aria-current="page">PlayTest</a>
+            <a class="nav__link" href="../dashboard/">Dashboard</a>
           </nav>
         </div>
       </header>
@@ -104,10 +105,60 @@
             </div>
           </aside>
         </section>
+
+        <section class="add-scenario">
+          <div class="page-head">
+            <div>
+              <p class="eyebrow">시나리오 추가</p>
+              <h2 class="page-title">맵에서 waypoint를 찍어 시나리오를 만드세요.</h2>
+            </div>
+          </div>
+
+          <div class="map-workspace" data-map-section>
+            <section class="panel">
+              <div class="panel__header">
+                <div>
+                  <h3 class="panel__title">맵</h3>
+                  <p class="panel__hint">빈 공간을 클릭+드래그하면 waypoint가 추가됩니다(드래그 방향=rot). 장애물 위는 클릭 불가.</p>
+                </div>
+              </div>
+              <div class="panel__body">
+                <div class="map-canvas-wrap">
+                  <canvas id="mapCanvas"></canvas>
+                </div>
+                <div class="coord-display" data-coord-display>—</div>
+              </div>
+            </section>
+
+            <aside class="panel" aria-label="waypoint 목록">
+              <div class="panel__header">
+                <div>
+                  <h3 class="panel__title">Waypoints</h3>
+                  <p class="panel__hint">찍은 순서대로 시나리오 봉투로 추출됩니다.</p>
+                </div>
+              </div>
+              <div class="panel__body">
+                <div class="wp-actions">
+                  <button class="primary-button" type="button" data-copy-json>Copy JSON</button>
+                  <button class="primary-button" type="button" data-download-json>Download</button>
+                  <button class="primary-button" type="button" data-clear-waypoints>Clear All</button>
+                </div>
+                <div class="waypoint-list" data-waypoint-list></div>
+                <div class="json-preview-wrap">
+                  <label>JSON Output</label>
+                  <pre class="json-preview" data-json-preview>{}</pre>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </section>
       </main>
     </div>
     <script src="../common/core.js"></script>
     <script src="../common/manager-api.js"></script>
     <script src="./playtest.js"></script>
+    <script src="./map_geometry.js"></script>
+    <script src="./map_selector.js"></script>
+    <script>window.MapSelector.init();</script>
   </body>
 </html>
