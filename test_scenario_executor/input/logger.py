@@ -106,6 +106,15 @@ def _cursor_pos() -> tuple[int, int]:
     return int(pt.x), int(pt.y)
 
 
+def _recenter_cursor() -> None:
+    """녹화 시작 시 커서를 화면 중심으로 이동(best-effort). 상대 이동 원점 고정."""
+    try:
+        from .win_input import move_cursor_to_center
+        move_cursor_to_center()
+    except Exception:
+        pass
+
+
 def _format_win_error(code: int) -> str:
     if hasattr(ctypes, "FormatError"):
         return ctypes.FormatError(code)
@@ -201,6 +210,7 @@ class HookInputRecorder(InputRecorder):
         kernel32.SetLastError.restype = None
 
         self.events = []
+        _recenter_cursor()  # 녹화 시작: 커서를 화면 중심으로 → 상대 이동 원점 고정
         self._prev_cursor = _cursor_pos()
         self._t0 = time.perf_counter()
         self._last_move_t = 0.0
@@ -354,6 +364,7 @@ class PollingInputRecorder(InputRecorder):
         self.events = []
         self._prev_keys = {}
         self._prev_buttons = {}
+        _recenter_cursor()  # 녹화 시작: 커서를 화면 중심으로 → 상대 이동 원점 고정
         self._prev_cursor = _cursor_pos()
         self._t0 = time.perf_counter()
         self._running = True

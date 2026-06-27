@@ -1,83 +1,63 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
+const { app, BrowserWindow } = require("electron");
 const { spawn } = require("child_process");
-const fs = require("fs");
+const http = require("http");
 const path = require("path");
 
-const PYTHON_SCRIPT = path.join(__dirname, "..", "analyze.py");
+const SERVER_URL = "http://127.0.0.1:8765";
+const SERVER_ENTRY = ["-m", "manager.control"];
+const PROJECT_ROOT = path.join(__dirname, "..");
 const isMock = process.argv.includes("--mock");
 
-function createWindow() {
-  const win = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
-      contextIsolation: true,
-      nodeIntegration: false
-    }
+let serverProcess = null;
+
+function startServer() {
+  serverProcess = spawn("python3", SERVER_ENTRY, {
+    cwd: PROJECT_ROOT,
+    env: {
+      ...process.env,
+      LOVEBUG_UI_MOCK: isMock ? "1" : ""
+    },
+    stdio: "inherit"
   });
-
-  win.loadFile(path.join(__dirname, "dashboard", "index.html"));
-}
-
-ipcMain.handle("select-raw-data-folder", async () => {
-  const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
-  return result.canceled ? null : result.filePaths[0];
-});
-
-function analyzeVideosMock(event) {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const result = { resultDir: path.join(__dirname, "mock", "results") };
-      event.sender.send("analysis-complete", result);
-      resolve({ ok: true });
-    }, 1500);
+  serverProcess.on("error", (err) => {
+    console.error("FastAPI 서버 실행 실패:", err);
   });
 }
 
-function analyzeVideosReal(event, payload) {
+function waitForServer(url, retries = 30, intervalMs = 300) {
   return new Promise((resolve, reject) => {
-    const proc = spawn("python3", [PYTHON_SCRIPT, payload.videoDirectory], {
-      stdio: ["inherit", "pipe", "inherit"]
-    });
-
-    let output = "";
-    proc.stdout.on("data", (chunk) => { output += chunk; });
-
-    proc.on("close", (code) => {
-      if (code === 0) {
-        let result = { ok: true };
-        try { result = JSON.parse(output.trim()); } catch (_) {}
-        event.sender.send("analysis-complete", result);
-        resolve(result);
-      } else {
-        reject(new Error(`Python exited with code ${code}`));
-      }
-    });
-    proc.on("error", reject);
+    let attempts = 0;
+    const check = () => {
+      http.get(`${url}/run/status`, (res) => {
+        if (res.statusCode < 500) resolve();
+        else retry();
+      }).on("error", retry);
+    };
+    const retry = () => {
+      if (++attempts >= retries) return reject(new Error("서버 시작 시간 초과"));
+      setTimeout(check, intervalMs);
+    };
+    check();
   });
 }
 
-ipcMain.handle("analyze-videos", (event, payload) =>
-  isMock ? analyzeVideosMock(event) : analyzeVideosReal(event, payload)
-);
+function createWindow() {
+  const win = new BrowserWindow({ width: 1280, height: 800 });
+  win.loadURL(`${SERVER_URL}/dashboard/`);
+}
 
-ipcMain.handle("open-analysis-result-folder", (_, folderPath) => shell.openPath(folderPath));
-
-ipcMain.handle("open-analysis-artifact", (_, resultDir, artifactPath) => {
-  if (!resultDir || !artifactPath) return "";
-  return shell.openPath(path.join(resultDir, artifactPath));
+app.whenReady().then(async () => {
+  startServer();
+  try {
+    await waitForServer(SERVER_URL);
+  } catch (err) {
+    console.error(err.message);
+  }
+  createWindow();
 });
-
-ipcMain.handle("read-package-manifest", (_, resultDir) => {
-  const packageManifest = path.join(resultDir, "package_manifest.json");
-  const raw = fs.readFileSync(packageManifest, "utf8");
-  return JSON.parse(raw);
-});
-
-app.whenReady().then(createWindow);
 
 app.on("window-all-closed", () => {
+  if (serverProcess) serverProcess.kill();
   if (process.platform !== "darwin") app.quit();
 });
 

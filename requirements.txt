@@ -1,4 +1,19 @@
-openai>=1.40
-opencv-python>=4.8
+# manager (control server)
+fastapi
+uvicorn[standard]
+websockets>=13
+
+# crossfire_qa (detector / report pipeline)
 numpy>=1.24
-mss>=9.0
+opencv-python>=4.8
+
+# record_replay
+mss
+anthropic
+openai>=1.40
+
+# test_scenario_executor
+# (already covered by the entries above)
+
+# dev / test
+pytest>=8

@@ -66,6 +66,7 @@ Run:
 python run.py \
   --dataset dataset \
   --out outputs/final_qa \
+  --clean-output \
   --score-backend easyocr \
   --score-sample-interval-sec 1.0 \
   --evidence-config configs/evidence_report_config.fast_final.json \
@@ -99,6 +100,17 @@ The root `final_report.json` is the main machine-readable report. It includes:
 - `trace_links`
 - `run_reproducibility`
 
+If you run a different video or dataset, use a new `--out` directory or pass
+`--clean-output`. Otherwise older per-video folders can remain beside the new
+report and make it look like the same manifest is being reused. Confirm the
+actual input in:
+
+```text
+final_report.json
+  input_videos[*].video_path
+  analysis_config.pipeline_options.dataset
+```
+
 ## Build A Frontend Handoff Package
 
 After running QA, create a compact package for a web/frontend team:
@@ -107,6 +119,7 @@ After running QA, create a compact package for a web/frontend team:
 python build_qa_review_package.py \
   --run-dir outputs/final_qa \
   --out outputs/qa_review_package \
+  --clean \
   --include-pass-details \
   --pass-sample-limit-per-type 3
 ```

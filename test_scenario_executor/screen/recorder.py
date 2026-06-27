@@ -46,6 +46,13 @@ class ScreenRecorder:
         self._meta: dict[str, Any] = {}
         self._callback_queue: queue.Queue[Any] = queue.Queue(maxsize=300)
         self._callback_thread: threading.Thread | None = None
+        self._latest_frame = None
+        self._frame_lock = threading.Lock()
+
+    @property
+    def latest_frame(self):
+        with self._frame_lock:
+            return self._latest_frame
 
     @property
     def is_recording(self) -> bool:
@@ -121,6 +128,8 @@ class ScreenRecorder:
 
                     raw = sct.grab(monitor)
                     frame = cv2.cvtColor(np.array(raw), cv2.COLOR_BGRA2BGR)
+                    with self._frame_lock:
+                        self._latest_frame = frame
                     if writer is None:
                         height, width = frame.shape[:2]
                         fourcc = cv2.VideoWriter_fourcc(*"mp4v")

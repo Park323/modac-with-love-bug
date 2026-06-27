@@ -298,6 +298,8 @@ class RespawnSegmentDetector:
         confirmed = float(self.thresholds.get("confirmed_confidence", 0.70))
         inferred = float(self.thresholds.get("inferred_confidence", 0.45))
         if alive_seg is None:
+            if "no_later_segment" in notes:
+                return "UNCERTAIN", "RESPAWN_UNOBSERVED_VIDEO_END"
             if confidence >= inferred:
                 return "UNCERTAIN", "MISSING_OR_UNOBSERVED_RESPAWN"
             return "MISSING", "MISSING_RESPAWN"

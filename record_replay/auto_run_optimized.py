@@ -43,6 +43,8 @@ from record_replay.src.navigator import (
     NAV_POLL_HZ,
     WAYPOINT_TIMEOUT_SEC,
 )
+from record_replay.src import win_input as wi
+from record_replay.src.keys import NAME_TO_VK, scan_code_for_vk
 
 # ── tuning ────────────────────────────────────────────────────────────────────
 
@@ -50,23 +52,17 @@ RESPAWN_RADIUS_PX      = 80.0   # within this distance of spawn = "just respawne
 MOVED_THRESHOLD_PX     = 150.0  # must travel this far from spawn before respawn can trigger
 TELEPORT_THRESHOLD_PX  = 200.0  # position jump larger than this in one poll = teleport
 MAX_RESTARTS           = 5      # abort after this many respawn recoveries
+MAX_RECORDING_SEC      = 30.0   # hard stop after this many seconds
 MAX_REROUTES           = 5      # max A* recomputes per single waypoint
 
 RESPAWN_SETTLE_MAX_SEC  = 8.0   # max time to wait for respawn animation to finish
 RESPAWN_SETTLE_DIST_PX  = 5.0   # movement below this = "not moving" (settled)
 RESPAWN_SETTLE_POLLS    = 5     # consecutive settled polls needed to confirm ready
 
-# ── spawn positions ───────────────────────────────────────────────────────────
-
-BL_SPAWN = {"x": 116.0,  "y": 261.0, "rot": 90.0}
-GR_SPAWN = {"x": 1901.0, "y": 123.0, "rot": 270.0}
-
 VK_F8  = 0x77
-VK_F9  = 0x78
 VK_F10 = 0x79
 
 _user32 = ctypes.windll.user32
-
 
 def _is_pressed(vk: int) -> bool:
     return bool(_user32.GetAsyncKeyState(vk) & 0x8000)
@@ -88,7 +84,12 @@ def load_snippet(path: str) -> list[Waypoint]:
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
     raw = data.get("waypoints", data) if isinstance(data, dict) else data
-    return [Waypoint.from_dict(w) for w in raw if w.get("position")]
+    # flat client format [{idx,x,y,rot}] → sort by idx
+    if raw and "idx" in raw[0]:
+        raw = sorted(raw, key=lambda w: w.get("idx", 0))
+    # accept both {position:{x,y,rot}} and flat {x,y,rot}
+    return [Waypoint.from_dict(w) for w in raw
+            if w.get("position") or ("x" in w and "y" in w)]
 
 
 # ── optimized navigator ───────────────────────────────────────────────────────
@@ -112,11 +113,15 @@ class OptimizedNavigator(AutoNavigator):
         waypoints:   list[Waypoint],
         output_path: str,
         session_id:  str = "auto_run_opt",
-        start_state: dict | None = None,
     ) -> dict:
-        self._spawn_position      = dict(start_state) if start_state else None
+        self._spawn_position = self._get_current_state()
+        if self._spawn_position:
+            print(f"[NAV] Spawn detected: "
+                  f"({self._spawn_position['x']:.0f}, {self._spawn_position['y']:.0f})  "
+                  f"rot={self._spawn_position['rot']:.0f}°")
+        else:
+            print("[NAV] Warning: spawn not detected — respawn recovery disabled")
         self._max_dist_from_spawn = 0.0
-        self._start_state         = start_state
         self._running             = True
         self._start_recording()
         try:
@@ -135,8 +140,14 @@ class OptimizedNavigator(AutoNavigator):
     def _run_loop(self, waypoints: list[Waypoint]) -> None:
         wp_index      = 0
         restart_count = 0
+        deadline      = time.perf_counter() + MAX_RECORDING_SEC
 
         while wp_index < len(waypoints) and self._running:
+            if time.perf_counter() > deadline:
+                print(f"[NAV] Max recording time ({MAX_RECORDING_SEC}s) reached — stopping")
+                self._running = False
+                return
+
             wp = waypoints[wp_index]
             print(f"[NAV] Waypoint {wp_index + 1}/{len(waypoints)}: "
                   f"({wp.x:.0f}, {wp.y:.0f})  rot={wp.rot:.0f}°")
@@ -176,9 +187,14 @@ class OptimizedNavigator(AutoNavigator):
             if not self._running:
                 return "ok"
 
-            state = self._get_current_state()
-            if state is None:
-                print("[NAV]   No position data — skipping")
+            raw = self._get_current_state()
+            if raw is not None:
+                self._last_known_state = raw
+                state = raw
+            elif getattr(self, "_last_known_state", None):
+                state = self._last_known_state
+            else:
+                print("[NAV]   No position data yet — skipping waypoint")
                 return "ok"
 
             # (Re-)compute A* path from current position
@@ -194,30 +210,30 @@ class OptimizedNavigator(AutoNavigator):
             else:
                 path_pts = [(target.x, target.y)]
 
-            # Walk each intermediate point
+            # Walk entire path with W held continuously
             needs_reroute = False
-            for ix, (px, py) in enumerate(path_pts):
-                if not self._running:
-                    return "ok"
+            scan_w = scan_code_for_vk(NAME_TO_VK["W"])
+            wi.send_keyboard_scan(scan_w, False, is_up=False)
+            try:
+                for ix, (px, py) in enumerate(path_pts):
+                    if not self._running:
+                        return "ok"
 
-                is_final  = (ix == len(path_pts) - 1)
-                threshold = FINAL_REACH_PX if is_final else REACH_THRESHOLD_PX
+                    is_final  = (ix == len(path_pts) - 1)
+                    threshold = FINAL_REACH_PX if is_final else REACH_THRESHOLD_PX
 
-                signal = self._walk_to_optimized(px, py, threshold)
+                    signal = self._walk_to_optimized(px, py, threshold)
 
-                if signal == "respawned":
-                    return "respawned"
+                    if signal == "respawned":
+                        return "respawned"
 
-                if signal == "timeout":
-                    # pushed off path — break to recompute A* from current pos
-                    needs_reroute = True
-                    break
+                    if signal == "timeout":
+                        needs_reroute = True
+                        break
+            finally:
+                wi.send_keyboard_scan(scan_w, False, is_up=True)
 
             if not needs_reroute:
-                # reached final point — apply rotation
-                state = self._get_current_state()
-                if state and self._running:
-                    self._rotate_to(target.rot, state["rot"])
                 return "ok"
 
         print(f"[NAV]   Could not reach waypoint after {MAX_REROUTES} re-routes — moving on")
@@ -234,13 +250,20 @@ class OptimizedNavigator(AutoNavigator):
         """
         deadline     = time.perf_counter() + RESPAWN_SETTLE_MAX_SEC
         stable_count = 0
-        prev         = self._get_current_state()
+        raw  = self._get_current_state()
+        if raw is not None:
+            self._last_known_state = raw
+        prev = raw or getattr(self, "_last_known_state", None)
 
         while time.perf_counter() < deadline and self._running:
             time.sleep(0.1)
-            curr = self._get_current_state()
-            if curr is None or prev is None:
-                break
+            raw  = self._get_current_state()
+            if raw is not None:
+                self._last_known_state = raw
+            curr = raw or getattr(self, "_last_known_state", None)
+            if prev is None:
+                prev = curr
+                continue
 
             moved = math.hypot(curr["x"] - prev["x"], curr["y"] - prev["y"])
             if moved < RESPAWN_SETTLE_DIST_PX:
@@ -272,18 +295,44 @@ class OptimizedNavigator(AutoNavigator):
 
         Returns: 'ok' | 'timeout' | 'respawned'
         """
-        interval   = 1.0 / NAV_POLL_HZ
         deadline   = time.perf_counter() + WAYPOINT_TIMEOUT_SEC
-        prev_state = self._get_current_state()
+
+        raw = self._get_current_state()
+        if raw is not None:
+            self._last_known_state = raw
+        prev_state = raw or getattr(self, "_last_known_state", None)
+
+        # Rotate to segment bearing once (W already held by caller)
+        if prev_state:
+            dx0 = tx - prev_state["x"]
+            dy0 = ty - prev_state["y"]
+            if math.hypot(dx0, dy0) > threshold:
+                self._rotate_to(
+                    math.degrees(math.atan2(dx0, -dy0)) % 360,
+                    prev_state["rot"],
+                )
+
+        last_fresh_t = time.perf_counter()
+        STALE_TIMEOUT_SEC = 2.0
 
         while self._running:
             if time.perf_counter() > deadline:
                 print(f"[NAV]   timeout heading to ({tx:.0f}, {ty:.0f})")
                 return "timeout"
 
-            state = self._get_current_state()
-            if state is None:
-                return "ok"
+            raw = self._get_current_state()
+            if raw is not None:
+                self._last_known_state = raw
+                last_fresh_t = time.perf_counter()
+                state = raw
+            elif getattr(self, "_last_known_state", None):
+                if time.perf_counter() - last_fresh_t > STALE_TIMEOUT_SEC:
+                    print(f"[NAV]   no fresh position for {STALE_TIMEOUT_SEC}s — assuming arrived")
+                    return "ok"
+                state = self._last_known_state
+            else:
+                time.sleep(0.05)
+                continue
 
             # ── respawn check ────────────────────────────────────────────────
             if self._spawn_position and prev_state:
@@ -292,35 +341,27 @@ class OptimizedNavigator(AutoNavigator):
                     state["y"] - self._spawn_position["y"],
                 )
                 self._max_dist_from_spawn = max(self._max_dist_from_spawn, d_spawn)
-
                 jump = math.hypot(
                     state["x"] - prev_state["x"],
                     state["y"] - prev_state["y"],
                 )
-                # respawn = sudden teleport + landed near spawn
                 if (self._max_dist_from_spawn > MOVED_THRESHOLD_PX
                         and jump > TELEPORT_THRESHOLD_PX
                         and d_spawn < RESPAWN_RADIUS_PX):
                     print(f"[NAV]   Respawn detected — "
-                          f"jump={jump:.0f}px  "
-                          f"dist_to_spawn={d_spawn:.0f}px  "
+                          f"jump={jump:.0f}px  dist_to_spawn={d_spawn:.0f}px  "
                           f"pos ({state['x']:.0f}, {state['y']:.0f})")
                     return "respawned"
 
             prev_state = state
 
-            # ── move toward target ───────────────────────────────────────────
-            dx   = tx - state["x"]
-            dy   = ty - state["y"]
-            dist = math.hypot(dx, dy)
-
+            dist = math.hypot(tx - state["x"], ty - state["y"])
             if dist <= threshold:
+                print(f"[NAV]   reached ({tx:.0f}, {ty:.0f})  dist={dist:.0f}px ✓")
                 return "ok"
 
-            bearing = math.degrees(math.atan2(dx, -dy)) % 360
+            bearing = math.degrees(math.atan2(tx - state["x"], -(ty - state["y"]))) % 360
             self._rotate_to(bearing, state["rot"])
-            self._step_forward(interval)
-            time.sleep(interval)
 
         return "ok"
 
@@ -344,40 +385,33 @@ def main() -> None:
     print()
     print("=" * 55)
     print(f"  Snippet : {snippet_path}")
-    print(f"  F8  → start as GR  (x=1901, y=123,  rot=270°)")
-    print(f"  F9  → start as BL  (x=116,  y=261,  rot=90°)")
+    print(f"  F8  → start  (spawn = position at t=0)")
     print(f"  F10 → stop and save")
     print(f"  Respawn recovery : ON  (max {MAX_RESTARTS} restarts)")
     print(f"  Path re-route    : ON  (max {MAX_REROUTES} per waypoint)")
     print("=" * 55)
 
-    # ── wait for team selection ───────────────────────────────────────────────
-    team = start_state = None
-    prev_f8 = prev_f9 = prev_f10 = False
+    # ── wait for start ────────────────────────────────────────────────────────
+    started = False
+    prev_f8 = prev_f10 = False
 
-    while team is None:
+    while not started:
         f8  = _is_pressed(VK_F8)
-        f9  = _is_pressed(VK_F9)
         f10 = _is_pressed(VK_F10)
 
         if f8 and not prev_f8:
             _wait_release(VK_F8)
-            team, start_state = "GR", GR_SPAWN
-        if f9 and not prev_f9:
-            _wait_release(VK_F9)
-            team, start_state = "BL", BL_SPAWN
+            started = True
         if f10 and not prev_f10:
             print("[AUTO] Quit")
             sys.exit(0)
 
-        prev_f8, prev_f9, prev_f10 = f8, f9, f10
+        prev_f8, prev_f10 = f8, f10
         time.sleep(0.01)
 
-    print(f"[AUTO] Team: {team} — starting at "
-          f"({start_state['x']:.0f}, {start_state['y']:.0f})  rot={start_state['rot']:.0f}°")
     _beep_countdown()
 
-    session_id  = f"auto_opt_{team}_{int(time.time())}"
+    session_id  = f"auto_opt_{int(time.time())}"
     output_path = f"record_replay/recordings/{session_id}.json"
     navigator   = OptimizedNavigator()
 
@@ -388,7 +422,6 @@ def main() -> None:
             waypoints=waypoints,
             output_path=output_path,
             session_id=session_id,
-            start_state=start_state,
         ),
         daemon=True,
     )

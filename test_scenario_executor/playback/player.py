@@ -78,6 +78,7 @@ class ActionPlayer:
             return 0
 
         self._running = True
+        self._recenter_cursor()  # 재생 시작 시 커서를 화면 중심으로 1회 이동(상대 이동 원점 고정)
         played = 0
         t_start = time.perf_counter()
         try:
@@ -90,6 +91,13 @@ class ActionPlayer:
         finally:
             self._running = False
         return played
+
+    def _recenter_cursor(self) -> None:
+        """커서를 화면 중심으로 이동(best-effort). 실패해도 재생은 계속."""
+        try:
+            wi.move_cursor_to_center()
+        except Exception:
+            pass
 
     def _wait_until(self, action: dict[str, Any], t_start: float) -> None:
         target_t = action.get("t", action.get("time", None))

@@ -16,16 +16,18 @@ from manager.modules import ICaptureModule
 
 
 class RealCaptureModule(ICaptureModule):
-    def __init__(self, screenshot_fps: float = 5.0, video_fps: float = 30.0,
+    def __init__(self, screenshot_fps: float = 10.0, video_fps: float = 30.0,
                  session_prefix: str = "playtest") -> None:
         self._screenshot_fps = screenshot_fps
         self._video_fps = video_fps
         self._session_prefix = session_prefix
         self._recorder = None
+        self._clock = None
         self._thread: threading.Thread | None = None
         self._summary: dict | None = None
 
     def begin(self, clock: Clock) -> None:
+        self._clock = clock
         # 지연 import: 이 모듈 import 시점에 cv2/mss 강제 로드 안 함
         from test_scenario_executor.screen.recorder import ScreenRecorder
 
@@ -41,8 +43,9 @@ class RealCaptureModule(ICaptureModule):
         self._thread.start()
 
     def next(self) -> Frame:
-        # 이 모듈은 파일/스레드 기반 녹화라 pull(next) 모델 미사용.
-        raise NotImplementedError("RealCaptureModule records to disk; next() unused")
+        arr = self._recorder.latest_frame if self._recorder is not None else None
+        ts = self._clock.now_ms() if self._clock is not None else 0
+        return Frame(timestamp_ms=ts, bgr=arr)
 
     def end(self) -> None:
         if self._recorder is None:

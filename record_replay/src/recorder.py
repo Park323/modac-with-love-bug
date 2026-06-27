@@ -197,9 +197,39 @@ class BaseRecorder:
     def _elapsed(self) -> float:
         return round(time.perf_counter() - self._t0, 4)
 
+    _POSITION_TTL = 0.10   # throttle locate() to 10 Hz max
+
     def _get_position(self) -> dict | None:
-        # TODO: populate with map position data once assets/mapinfo.json is ready
-        return None
+        now = time.perf_counter()
+        if hasattr(self, "_pos_cache_time") and now - self._pos_cache_time < self._POSITION_TTL:
+            return getattr(self, "_pos_cache_val", None)
+        try:
+            import cv2
+            import numpy as np
+            import importlib.util
+            from pathlib import Path as _P
+
+            if not hasattr(self, "_locate_fn"):
+                _spec = importlib.util.spec_from_file_location(
+                    "_radar", _P(__file__).parent.parent / "radar.py"
+                )
+                _mod = importlib.util.module_from_spec(_spec)
+                _spec.loader.exec_module(_mod)
+                self._locate_fn = _mod.locate
+
+            if not hasattr(self, "_sct"):
+                import mss as _mss
+                self._sct = _mss.mss()
+
+            raw = self._sct.grab(self._sct.monitors[1])
+            frame = cv2.cvtColor(np.array(raw), cv2.COLOR_BGRA2BGR)
+            x, y, yaw, _ = self._locate_fn(frame)
+            result: dict | None = {"x": float(x), "y": float(y), "rot": float(yaw)}
+        except Exception:
+            result = None
+        self._pos_cache_val = result
+        self._pos_cache_time = now
+        return result
 
 
 class HookRecorder(BaseRecorder):

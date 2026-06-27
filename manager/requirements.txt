@@ -1,2 +1,4 @@
+fastapi
+uvicorn[standard]
 websockets>=13
 pytest>=8
