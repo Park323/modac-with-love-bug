@@ -3,44 +3,48 @@ from manager.clock import Clock
 from manager.frame import Frame
 
 
-def test_next_returns_pushed_callback_frame():
+class _FakeRecorder:
+    def __init__(self):
+        self._latest = None
+
+    @property
+    def latest_frame(self):
+        return self._latest
+
+
+def test_next_returns_latest_frame():
+    # [A/B] next()는 recorder.latest_frame(갓 잡은 최신 프레임)을 반환.
     cap = RealCaptureModule()
     cap._clock = Clock()
     cap._clock.start()
+    rec = _FakeRecorder()
+    cap._recorder = rec
+
+    assert cap.next().bgr is None       # 아직 grab 전
 
     sentinel = object()
-    cap._on_frame(sentinel)       # ScreenRecorder 스샷 콜백 시뮬레이션
+    rec._latest = sentinel
     f = cap.next()
     assert isinstance(f, Frame)
     assert f.bgr is sentinel
     assert f.timestamp_ms >= 0
 
 
-def test_next_returns_none_when_no_frame_pushed():
-    cap = RealCaptureModule()
-    cap._clock = Clock()
-    cap._clock.start()
-    f = cap.next()                # 큐 비어있음 → 0.2s timeout 후 None
-    assert isinstance(f, Frame)
-    assert f.bgr is None
-
-
-def test_on_frame_keeps_only_latest():
-    cap = RealCaptureModule()
-    cap._clock = Clock()
-    cap._clock.start()
-    old, new = object(), object()
-    cap._on_frame(old)
-    cap._on_frame(new)            # 최신만 유지(old 드롭)
-    assert cap.next().bgr is new
-
-
 def test_next_before_begin_returns_none_bgr():
     cap = RealCaptureModule()
-    f = cap.next()                # recorder/clock 없음, 큐 비어있음
+    f = cap.next()                      # recorder/clock 없음
     assert isinstance(f, Frame)
     assert f.bgr is None
     assert f.timestamp_ms == 0
+
+
+def test_on_frame_keeps_only_latest_in_queue():
+    # 콜백 큐는 보존(미사용이지만 최신만 유지하는지 단위 검증).
+    cap = RealCaptureModule()
+    old, new = object(), object()
+    cap._on_frame(old)
+    cap._on_frame(new)
+    assert cap._frame_q.get_nowait() is new
 
 
 def test_default_fps_video_30_screenshot_10():
