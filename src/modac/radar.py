@@ -103,7 +103,8 @@ def detect_yaw(
     radar_crop: np.ndarray,
     *,
     marker_path: str = NORTH_MARKER_PATH,
-    step_deg: int = 1,
+    coarse_step: int = 6,
+    fine_window: int = 6,
 ) -> tuple[float, float]:
     """Estimate yaw by finding the N marker around the ring.
 
@@ -111,6 +112,10 @@ def detect_yaw(
     template-matches the upright marker there; the most decisive angle wins. The
     rotation that lands N at the top is the player's yaw (the radar is player-up,
     so north sits at screen angle -yaw).
+
+    Coarse-to-fine: scan every ``coarse_step`` degrees, then refine ±``fine_window``
+    around the best at 1°. The marker's correlation-vs-angle peak is broad, so this
+    matches the exhaustive 1° search (verified on all test cases) at ~5x less work.
 
     Returns ``(yaw, score)`` — yaw in degrees clockwise from north, score is the
     winning normalized-correlation (higher = more confident; a low score means
@@ -123,17 +128,24 @@ def detect_yaw(
     half = tw // 2 + 40
     band_h = th + 24
 
-    best_score, best_deg = -1.0, 0
-    for deg in range(0, 360, step_deg):
+    def score_at(deg: int) -> float:
         M = cv2.getRotationMatrix2D((cx, cy), deg, 1.0)
         rot = cv2.warpAffine(gray, M, (gray.shape[1], gray.shape[0]))
         band = rot[0:band_h, max(0, int(cx - half)):int(cx + half)]
         if band.shape[0] < th or band.shape[1] < tw:
-            continue
-        res = cv2.matchTemplate(band, tmpl, cv2.TM_CCOEFF_NORMED)
-        s = float(res.max())
+            return -1.0
+        return float(cv2.matchTemplate(band, tmpl, cv2.TM_CCOEFF_NORMED).max())
+
+    best_score, best_deg = -1.0, 0
+    for deg in range(0, 360, coarse_step):
+        s = score_at(deg)
         if s > best_score:
             best_score, best_deg = s, deg
+    for deg in range(best_deg - fine_window, best_deg + fine_window + 1):
+        d = deg % 360
+        s = score_at(d)
+        if s > best_score:
+            best_score, best_deg = s, d
 
     # deg = CCW rotation that brings N to top; yaw is clockwise from north.
     yaw = float((360 - best_deg) % 360)
@@ -294,41 +306,35 @@ def _verify_render(capture: np.ndarray, x: int, y: int, yaw: float) -> np.ndarra
 
 if __name__ == "__main__":
     import sys
-    from glob import glob
     import time
-    
+    from glob import glob
+
     start = time.perf_counter()
-    for _ in range(10):
-        cap = _read_capture("../../assets/test_cases/Crossfire20260627_0001.bmp")
-        results = locate(cap)
-        print(results)
-    
+    args = sys.argv[1:] or sorted(glob("assets/test_cases/*.bmp"))
+    tiles, pts = [], []
+    for p in args:
+        cap = _read_capture(p)
+        # render/plot in minimap_2 frame (where the assets live); report real-map coords.
+        x, y, yaw, score = _locate_minimap2(cap)
+        mx, my = _to_real_map(x, y)
+        print(f"{Path(p).name}: map=({mx},{my})  [minimap2=({x},{y})]  yaw={yaw:6.1f}  score={score:.3f}")
+        pair = _verify_render(cap, x, y, yaw)
+        cv2.putText(pair, f"{Path(p).stem[-4:]} map({mx},{my}) {score:.2f}", (4, 14),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.42, (0, 255, 0), 1)
+        tiles.append(cv2.copyMakeBorder(pair, 2, 2, 2, 2, cv2.BORDER_CONSTANT, value=(80, 80, 80)))
+        pts.append((x, y, Path(p).stem[-2:]))
 
-    # args = sys.argv[1:] or sorted(glob("assets/test_cases/*.bmp"))
-    # tiles, pts = [], []
-    # for p in args:
-    #     cap = _read_capture(p)
-    #     # render/plot in minimap_2 frame (where the assets live); report real-map coords.
-    #     x, y, yaw, score = _locate_minimap2(cap)
-    #     mx, my = _to_real_map(x, y)
-    #     print(f"{Path(p).name}: map=({mx},{my})  [minimap2=({x},{y})]  yaw={yaw:6.1f}  score={score:.3f}")
-    #     pair = _verify_render(cap, x, y, yaw)
-    #     cv2.putText(pair, f"{Path(p).stem[-4:]} map({mx},{my}) {score:.2f}", (4, 14),
-    #                 cv2.FONT_HERSHEY_SIMPLEX, 0.42, (0, 255, 0), 1)
-    #     tiles.append(cv2.copyMakeBorder(pair, 2, 2, 2, 2, cv2.BORDER_CONSTANT, value=(80, 80, 80)))
-    #     pts.append((x, y, Path(p).stem[-2:]))
+    if tiles:
+        rows = [np.hstack(tiles[i:i + 3]) for i in range(0, len(tiles), 3)]
+        w = max(r.shape[1] for r in rows)
+        rows = [cv2.copyMakeBorder(r, 0, 0, 0, w - r.shape[1], cv2.BORDER_CONSTANT, value=(20, 20, 20)) for r in rows]
+        cv2.imwrite("_loc_montage.png", np.vstack(rows))
+        mm = cv2.cvtColor(cv2.imread(MAP_PATH, cv2.IMREAD_UNCHANGED)[:, :, :3], cv2.COLOR_BGR2GRAY)
+        g = cv2.cvtColor(mm, cv2.COLOR_GRAY2BGR)
+        for x, y, lbl in pts:
+            cv2.circle(g, (x, y), 4, (0, 0, 255), -1)
+            cv2.putText(g, lbl, (x + 4, y + 4), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0), 1)
+        cv2.imwrite("_loc_on_map.png", cv2.resize(g, (0, 0), fx=1.7, fy=1.7, interpolation=cv2.INTER_NEAREST))
+        print("wrote _loc_montage.png and _loc_on_map.png")
 
-    # if tiles:
-    #     rows = [np.hstack(tiles[i:i + 3]) for i in range(0, len(tiles), 3)]
-    #     w = max(r.shape[1] for r in rows)
-    #     rows = [cv2.copyMakeBorder(r, 0, 0, 0, w - r.shape[1], cv2.BORDER_CONSTANT, value=(20, 20, 20)) for r in rows]
-    #     cv2.imwrite("_loc_montage.png", np.vstack(rows))
-    #     mm = cv2.cvtColor(cv2.imread("assets/minimap_2.png", cv2.IMREAD_UNCHANGED)[:, :, :3], cv2.COLOR_BGR2GRAY)
-    #     g = cv2.cvtColor(mm, cv2.COLOR_GRAY2BGR)
-    #     for x, y, lbl in pts:
-    #         cv2.circle(g, (x, y), 4, (0, 0, 255), -1)
-    #         cv2.putText(g, lbl, (x + 4, y + 4), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0), 1)
-    #     cv2.imwrite("_loc_on_map.png", cv2.resize(g, (0, 0), fx=1.7, fy=1.7, interpolation=cv2.INTER_NEAREST))
-    #     print("wrote _loc_montage.png and _loc_on_map.png")
-    
-    print(f"done in {time.perf_counter()-start}s")
+    print(f"done in {time.perf_counter() - start:.2f}s")
