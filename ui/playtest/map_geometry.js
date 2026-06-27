@@ -18,13 +18,26 @@
     return inside;
   }
 
-  // waypoint 허용 = walkable:true 로 표시된 통로 object 위에서만.
-  // 중앙 바닥/장애물 등 그 외 영역은 전부 클릭 불가.
+  // 클릭 허용 판정:
+  //  1) 장애물 박스(walkable!==true object) 위 → 불가
+  //  2) 통로(walkable:true object) 위 → 가능 (상/하/좌/우 통로)
+  //  3) 바닥 hole 안 → 가능 (중앙 빈 바닥)
+  //  4) 그 외(외벽 밖) → 불가
   function isWalkable(mx, my, mapInfo) {
     const pt = [mx, my];
     for (const obj of mapInfo.objects || []) {
+      if (obj.walkable !== true && obj.polygon && pointInPolygon(pt, obj.polygon)) {
+        return false;  // 장애물 박스
+      }
+    }
+    for (const obj of mapInfo.objects || []) {
       if (obj.walkable === true && obj.polygon && pointInPolygon(pt, obj.polygon)) {
-        return true;
+        return true;   // 통로
+      }
+    }
+    for (const wall of mapInfo.walls || []) {
+      for (const hole of wall.holes || []) {
+        if (pointInPolygon(pt, hole)) return true;  // 중앙 바닥
       }
     }
     return false;
