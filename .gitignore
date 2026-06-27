@@ -18,3 +18,13 @@ Thumbs.db
 CLAUDE.md
 docs
 .superpowers
+test_scenario_executor_output
+
+# IDE
+.vscode/
+.vs/
+
+# local scratch (MVP echo test)
+/qa_manager.ini
+/sample.png
+/scratch_echo.py
