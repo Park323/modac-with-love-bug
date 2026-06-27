@@ -44,10 +44,10 @@ LLKHF_EXTENDED = 0x01
 ULONG_PTR = wintypes.WPARAM
 _WINFUNCTYPE = getattr(ctypes, "WINFUNCTYPE", ctypes.CFUNCTYPE)
 LowLevelKeyboardProc = _WINFUNCTYPE(
-    ctypes.c_long, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM
+    wintypes.LPARAM, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM
 )
 LowLevelMouseProc = _WINFUNCTYPE(
-    ctypes.c_long, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM
+    wintypes.LPARAM, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM
 )
 
 
@@ -82,6 +82,10 @@ class MSLLHOOKSTRUCT(ctypes.Structure):
     ]
 
 
+class HookInstallError(RuntimeError):
+    """Raised when Windows refuses to install a low-level input hook."""
+
+
 def _user32():
     require_windows()
     return ctypes.windll.user32
@@ -100,6 +104,12 @@ def _cursor_pos() -> tuple[int, int]:
     pt = wintypes.POINT()
     _user32().GetCursorPos(ctypes.byref(pt))
     return int(pt.x), int(pt.y)
+
+
+def _format_win_error(code: int) -> str:
+    if hasattr(ctypes, "FormatError"):
+        return ctypes.FormatError(code)
+    return f"Windows error {code}"
 
 
 class InputRecorder:
@@ -172,33 +182,49 @@ class HookInputRecorder(InputRecorder):
         ]
         user32.SetWindowsHookExW.restype = wintypes.HHOOK
         user32.CallNextHookEx.restype = ctypes.c_long
+        user32.UnhookWindowsHookEx.argtypes = [wintypes.HHOOK]
+        user32.UnhookWindowsHookEx.restype = wintypes.BOOL
+        user32.PostThreadMessageW.argtypes = [
+            wintypes.DWORD,
+            wintypes.UINT,
+            wintypes.WPARAM,
+            wintypes.LPARAM,
+        ]
+        user32.PostThreadMessageW.restype = wintypes.BOOL
+        kernel32.GetCurrentThreadId.argtypes = []
+        kernel32.GetCurrentThreadId.restype = wintypes.DWORD
+        kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
+        kernel32.GetModuleHandleW.restype = wintypes.HMODULE
+        kernel32.GetLastError.argtypes = []
+        kernel32.GetLastError.restype = wintypes.DWORD
+        kernel32.SetLastError.argtypes = [wintypes.DWORD]
+        kernel32.SetLastError.restype = None
 
         self.events = []
         self._prev_cursor = _cursor_pos()
         self._t0 = time.perf_counter()
         self._last_move_t = 0.0
-        self._running = True
+        self._running = False
         self._thread_id = int(kernel32.GetCurrentThreadId())
 
-        module = kernel32.GetModuleHandleW(None)
-        self._keyboard_hook = user32.SetWindowsHookExW(
-            WH_KEYBOARD_LL, self._keyboard_proc, module, 0
-        )
-        if not self._keyboard_hook:
+        try:
+            self._keyboard_hook = self._install_hook(
+                user32, kernel32, WH_KEYBOARD_LL, self._keyboard_proc, "keyboard"
+            )
+            self._mouse_hook = self._install_hook(
+                user32, kernel32, WH_MOUSE_LL, self._mouse_proc, "mouse"
+            )
+        except Exception:
+            if self._keyboard_hook:
+                user32.UnhookWindowsHookEx(self._keyboard_hook)
+                self._keyboard_hook = None
             self._running = False
-            raise ctypes.WinError()
-
-        self._mouse_hook = user32.SetWindowsHookExW(
-            WH_MOUSE_LL, self._mouse_proc, module, 0
-        )
-        if not self._mouse_hook:
-            user32.UnhookWindowsHookEx(self._keyboard_hook)
-            self._keyboard_hook = None
-            self._running = False
-            raise ctypes.WinError()
+            self._thread_id = 0
+            raise
 
         msg = MSG()
         try:
+            self._running = True
             while self._running:
                 result = user32.GetMessageW(ctypes.byref(msg), None, 0, 0)
                 if result == 0:
@@ -221,6 +247,34 @@ class HookInputRecorder(InputRecorder):
         super().stop()
         if self._thread_id:
             _user32().PostThreadMessageW(self._thread_id, WM_QUIT, 0, 0)
+
+    def _install_hook(
+        self,
+        user32: Any,
+        kernel32: Any,
+        hook_id: int,
+        proc: Any,
+        label: str,
+    ) -> Any:
+        proc_ptr = ctypes.cast(proc, ctypes.c_void_p)
+        module = kernel32.GetModuleHandleW(None)
+        errors: list[str] = []
+
+        for module_handle in (module, None):
+            kernel32.SetLastError(0)
+            hook = user32.SetWindowsHookExW(hook_id, proc_ptr, module_handle, 0)
+            if hook:
+                return hook
+            code = int(kernel32.GetLastError())
+            handle_name = "current module" if module_handle else "NULL module"
+            errors.append(f"{handle_name}: {code} ({_format_win_error(code)})")
+
+        self._running = False
+        raise HookInstallError(
+            f"Could not install {label} hook. "
+            f"Tried current module and NULL module. Details: {'; '.join(errors)}. "
+            "If this PC blocks global hooks, start with backend='polling'."
+        )
 
     def _keyboard_callback(self, n_code: int, w_param: int, l_param: int) -> int:
         user32 = _user32()

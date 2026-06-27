@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from pathlib import Path
 from typing import Any, Literal
 
@@ -22,6 +23,7 @@ app = FastAPI(title="Test Scenario Executor API", version="1.0.0")
 
 _input_recorder: InputRecorder | None = None
 _input_thread: threading.Thread | None = None
+_input_start_error: BaseException | None = None
 _input_lock = threading.Lock()
 
 _screen_recorder = ScreenRecorder(output_root=SCREEN_RECORDINGS_DIR, fps=30.0)
@@ -67,13 +69,37 @@ def _input_path(session_id: str) -> Path:
 
 
 def _start_input_recording(config: InputRecordStart) -> dict[str, Any]:
-    global _input_recorder, _input_thread
+    global _input_recorder, _input_thread, _input_start_error
     with _input_lock:
         if _input_recorder and _input_recorder.is_recording:
             raise HTTPException(400, "Input recorder is already recording")
         _input_recorder = create_input_recorder(config.backend, sample_hz=config.sample_hz)
-        _input_thread = threading.Thread(target=_input_recorder.start, daemon=True)
+        _input_start_error = None
+
+        def run_input_recorder() -> None:
+            global _input_start_error
+            try:
+                assert _input_recorder is not None
+                _input_recorder.start()
+            except BaseException as exc:
+                _input_start_error = exc
+
+        _input_thread = threading.Thread(target=run_input_recorder, daemon=True)
         _input_thread.start()
+
+        deadline = time.perf_counter() + 1.0
+        while time.perf_counter() < deadline:
+            if _input_start_error:
+                message = str(_input_start_error)
+                raise HTTPException(
+                    500,
+                    f"Input recorder failed to start: {message}",
+                )
+            if _input_recorder.is_recording:
+                break
+            if not _input_thread.is_alive():
+                raise HTTPException(500, "Input recorder stopped before startup completed")
+            time.sleep(0.02)
     return {
         "status": "recording",
         "session_id": config.session_id,
