@@ -1,5 +1,5 @@
 (function () {
-const { bridge, formatTime, qs, setText } = window.Lovebug;
+const { formatTime, qs, setText } = window.Lovebug;
 
 const QA_RESULTS = ["FAIL", "UNCERTAIN", "NEED_REVIEW", "PASS"];
 const REVIEW_FILTERS = ["ALL", "FAIL", "UNCERTAIN", "NEED_REVIEW"];
@@ -292,8 +292,12 @@ function mountFinalReport(reportArea, report, resultDir) {
     }
 
     const artifactButton = event.target.closest("[data-artifact-path]");
-    if (artifactButton && bridge.openAnalysisArtifact) {
-      bridge.openAnalysisArtifact(resultDir, artifactButton.dataset.artifactPath);
+    if (artifactButton) {
+      const params = new URLSearchParams({
+        result_dir: resultDir,
+        path: artifactButton.dataset.artifactPath
+      });
+      window.open(`/dashboard/artifact?${params.toString()}`, "_blank");
     }
   });
 
@@ -338,79 +342,78 @@ function initDashboardPage() {
     if (reportPanel) reportPanel.hidden = true;
     resetResultMetrics();
 
-    if (bridge.onAnalysisComplete) {
-      bridge.onAnalysisComplete((result) => {
-        progress.style.setProperty("--progress", "100%");
-        setText("[data-status-text]", "분석 완료");
-        analyzeButton.disabled = false;
-        analyzeButton.textContent = "분석 시작";
-        isAnalyzing = false;
-        if (reportPanel) reportPanel.hidden = false;
-
-        const el = document.createElement("div");
-        el.className = "report-item";
-        el.innerHTML = `
-          <div class="report-item__top">
-            <strong>분석 완료</strong>
-            <span class="tag">done</span>
-          </div>
-          <p class="result-dir" title="${result.resultDir || ""}">${result.resultDir || "경로 없음"}</p>
-          <div class="report-actions">
-            <button class="secondary-button" type="button" data-open-result>결과 폴더 열기</button>
-          </div>
-        `;
-        if (bridge.openAnalysisResultFolder && result.resultDir) {
-          el.querySelector("[data-open-result]").addEventListener("click", () => {
-            bridge.openAnalysisResultFolder(result.resultDir);
-          });
-        }
-        reportArea.innerHTML = "";
-        reportArea.appendChild(el);
-        const reportDetail = document.createElement("div");
-        reportArea.appendChild(reportDetail);
-
-        if (bridge.readPackageManifest && result.resultDir) {
-          bridge.readPackageManifest(result.resultDir).then((report) => {
-            renderResultMetrics(report);
-            mountFinalReport(reportDetail, report, result.resultDir);
-          }).catch((err) => {
-            setText("[data-metric-report]", "오류");
-            reportDetail.innerHTML = `
-              <div class="empty-state">
-                <div>
-                  <strong>package_manifest.json을 읽지 못했습니다.</strong>
-                  <span>${esc(err.message || err)}</span>
-                </div>
-              </div>
-            `;
-          });
-        }
-      });
-    }
-
-    if (bridge.analyzeVideos) {
+    try {
       progress.style.setProperty("--progress", "60%");
       setText("[data-status-text]", "Python 분석 중");
-      await bridge.analyzeVideos(payload);
-    } else {
-      console.info("Lovebug analysis payload", payload);
+      const analyzeRes = await fetch("/dashboard/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!analyzeRes.ok) throw new Error(`분석 요청 실패 (${analyzeRes.status})`);
+      const result = await analyzeRes.json();
+      const resultDir = result.resultDir || payload.videoDirectory;
+
+      progress.style.setProperty("--progress", "82%");
+      setText("[data-status-text]", "리포트 생성 중");
+      if (reportPanel) reportPanel.hidden = false;
+
+      reportArea.innerHTML = "";
+      const el = document.createElement("div");
+      el.className = "report-item";
+      el.innerHTML = `
+        <div class="report-item__top">
+          <strong>분석 완료</strong>
+          <span class="tag">done</span>
+        </div>
+        <p class="result-dir" title="${esc(resultDir || "")}">${esc(resultDir || "경로 없음")}</p>
+        <span>생성 ${formatTime()}</span>
+      `;
+      reportArea.appendChild(el);
+      const reportDetail = document.createElement("div");
+      reportArea.appendChild(reportDetail);
+
+      const manifestRes = await fetch("/dashboard/package-manifest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resultDir })
+      });
+      if (!manifestRes.ok) throw new Error(`package_manifest.json을 읽지 못했습니다. (${manifestRes.status})`);
+      const report = await manifestRes.json();
+      renderResultMetrics(report);
+      mountFinalReport(reportDetail, report, resultDir);
+
+      progress.style.setProperty("--progress", "100%");
+      setText("[data-status-text]", "분석 완료");
+    } catch (err) {
+      if (reportPanel) reportPanel.hidden = false;
+      setText("[data-status-text]", "분석 오류");
+      setText("[data-metric-report]", "오류");
+      reportArea.innerHTML = `
+        <div class="empty-state">
+          <div>
+            <strong>package_manifest.json을 읽지 못했습니다.</strong>
+            <span>${esc(err.message || err)}</span>
+          </div>
+        </div>
+      `;
+    } finally {
+      analyzeButton.disabled = false;
+      analyzeButton.textContent = "분석 시작";
+      isAnalyzing = false;
     }
   };
 
   if (folderPickerBtn) {
-    if (!bridge.selectRawDataFolder) {
-      folderPickerBtn.disabled = true;
-      folderPickerBtn.title = "브릿지 미연결 — 경로를 직접 입력하세요";
-    } else {
-      folderPickerBtn.addEventListener("click", async () => {
-        try {
-          const path = await bridge.selectRawDataFolder();
-          if (path) directory.value = path;
-        } catch (err) {
-          console.warn("폴더 선택 실패", err);
-        }
-      });
-    }
+    folderPickerBtn.addEventListener("click", async () => {
+      try {
+        const res = await fetch("/dashboard/browse", { method: "POST" });
+        const data = await res.json();
+        if (data.path) directory.value = data.path;
+      } catch (err) {
+        console.warn("폴더 선택 실패", err);
+      }
+    });
   }
 
   form.addEventListener("submit", (event) => {
