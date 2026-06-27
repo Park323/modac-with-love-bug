@@ -25,6 +25,7 @@ class ScreenRecorder:
         screenshot_fps: float = 30.0,
         video_fps: float = 30.0,
         screenshot_callback_url: str | None = None,
+        frame_callback=None,
     ) -> None:
         if screenshot_fps <= 0:
             raise ValueError("screenshot_fps must be greater than 0")
@@ -34,6 +35,8 @@ class ScreenRecorder:
         self.screenshot_fps = screenshot_fps
         self.video_fps = video_fps
         self.screenshot_callback_url = screenshot_callback_url
+        # in-process 콜백: 스샷 캡처(screenshot_fps)마다 BGR 프레임을 push.
+        self._frame_callback = frame_callback
         self._running = False
         self._session_dir: Path | None = None
         self._screenshots_dir: Path | None = None
@@ -150,6 +153,11 @@ class ScreenRecorder:
                         self._notify_screenshot(
                             session_id, frame_path, self._screenshot_count, captured_at
                         )
+                        if self._frame_callback is not None:
+                            try:
+                                self._frame_callback(frame)
+                            except Exception:
+                                pass
                         self._screenshot_count += 1
                         next_screenshot_at += screenshot_interval
 
