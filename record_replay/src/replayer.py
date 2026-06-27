@@ -93,7 +93,13 @@ class InputReplayer:
 
     # ── dispatch ─────────────────────────────────────────────────────────────
 
+    def _apply_position(self, position: dict | None) -> None:
+        # TODO: use position for map-aware replay once assets/mapinfo.json is ready
+        pass
+
     def _dispatch(self, event: dict[str, Any]) -> None:
+        self._apply_position(event.get("position"))
+
         # ── v0.2 format (our recorder) ──
         t = event.get("type")
 
