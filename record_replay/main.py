@@ -11,7 +11,7 @@ from src.recorder import PollingRecorder
 from src.replayer import InputReplayer
 from src.detector import ScreenDetector
 
-app = FastAPI(title="Modacthon QA Input API v2", version="0.2.0")
+app = FastAPI(title="Modacthon QA Input API record_replay", version="0.2.0")
 
 _recorder = PollingRecorder(sample_hz=120)
 _replayer = InputReplayer(jitter_ms=2.0)

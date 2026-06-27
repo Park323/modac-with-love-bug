@@ -18,10 +18,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from v2.src.recorder import PollingRecorder
+from record_replay.src.recorder import PollingRecorder
 
 SESSION_ID   = "tdm_run_001"
-OUTPUT_PATH  = f"v2/recordings/{SESSION_ID}.json"
+OUTPUT_PATH  = f"record_replay/recordings/{SESSION_ID}.json"
 
 VK_F8  = 0x77
 VK_F9  = 0x78
