@@ -383,6 +383,39 @@ def summarize_video(video: Path, video_out: Path, stages_ok: bool) -> dict[str, 
     }
 
 
+PACKAGED_STAGE_REPORT_KEYS = {
+    "ui": "ui_detector",
+    "kill_count": "kill_count_reader",
+    "notifications": "notification_detector",
+    "game_state": "game_state_classifier",
+    "respawn": "respawn_segment_detector",
+    "spawn_location": "spawn_location_recognizer",
+    "global_timeline": "global_timeline",
+    "qa_rules": "qa_rule_engine",
+    "evidence": "evidence_report_generator",
+}
+
+
+def build_packaged_stage_reports(pipeline_manifests: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    packaged_stage_reports: list[dict[str, Any]] = []
+    for manifest in pipeline_manifests:
+        reports = {
+            PACKAGED_STAGE_REPORT_KEYS[key]: path
+            for key, path in (manifest.get("reports", {}) or {}).items()
+            if key in PACKAGED_STAGE_REPORT_KEYS
+        }
+        manifest_path = manifest.get("manifest_path")
+        if manifest_path:
+            reports["pipeline_manifest"] = manifest_path
+
+        packaged_stage_reports.append({
+            "video_id": manifest.get("video_id"),
+            "output_dir": manifest.get("output_dir"),
+            "reports": reports,
+        })
+    return packaged_stage_reports
+
+
 def build_dataset_summary(video_results: list[dict[str, Any]]) -> dict[str, Any]:
     completed = [r for r in video_results if r.get("status") == "COMPLETED"]
     failed = [r for r in video_results if r.get("status") != "COMPLETED"]
@@ -1005,6 +1038,7 @@ def build_sample_style_final_report(
         },
         "evidence_index": list(evidence_index.values()),
         "run_reproducibility": _run_reproducibility(args, out_root),
+        "packaged_stage_reports": build_packaged_stage_reports(pipeline_manifests),
     }
 
 

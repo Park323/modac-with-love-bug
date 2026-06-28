@@ -57,7 +57,7 @@ class DashboardAnalyzeRequest(BaseModel):
     requestedAt: str | None = None
 
 
-class PackageManifestRequest(BaseModel):
+class FinalReportRequest(BaseModel):
     resultDir: str
 
 
@@ -138,12 +138,12 @@ def dashboard_analyze(payload: DashboardAnalyzeRequest):
     return {"ok": True, "resultDir": result_dir}
 
 
-@app.post("/dashboard/package-manifest")
-def dashboard_package_manifest(req: PackageManifestRequest):
-    manifest_path = _safe_result_path(req.resultDir, "package_manifest.json")
-    if not manifest_path.exists():
-        raise HTTPException(status_code=404, detail="package_manifest.json not found")
-    return json.loads(manifest_path.read_text(encoding="utf-8"))
+@app.post("/dashboard/final-report")
+def dashboard_final_report(req: FinalReportRequest):
+    report_path = _safe_result_path(req.resultDir, "final_report.json")
+    if not report_path.exists():
+        raise HTTPException(status_code=404, detail="final_report.json not found")
+    return json.loads(report_path.read_text(encoding="utf-8"))
 
 
 @app.get("/dashboard/artifact")
