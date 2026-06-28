@@ -476,7 +476,16 @@ function initDashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resultDir })
       });
-      if (!reportRes.ok) throw new Error(`final_report.json을 읽지 못했습니다. (${reportRes.status})`);
+      if (!reportRes.ok) {
+        let detail = "";
+        try {
+          const errorBody = await reportRes.json();
+          detail = errorBody.detail ? ` ${errorBody.detail}` : "";
+        } catch (parseErr) {
+          detail = "";
+        }
+        throw new Error(`final_report.json을 읽지 못했습니다. (${reportRes.status})${detail}`);
+      }
       const report = await reportRes.json();
       renderResultMetrics(report);
       mountFinalReport(reportDetail, report, resultDir);

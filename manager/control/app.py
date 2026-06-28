@@ -1,5 +1,8 @@
 import json
 import os
+import subprocess
+import sys
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -16,7 +19,10 @@ from manager.control.dialog import pick_json_file, pick_directory
 from manager.recorder_session import RecordSession, RecorderStartError
 
 _UI_DIR = Path(__file__).resolve().parents[2] / "ui"
+_PROJECT_DIR = _UI_DIR.parent
 _MOCK_RESULTS_DIR = _UI_DIR / "mock" / "results"
+_CROSSFIRE_RUNNER = _PROJECT_DIR / "crossfire_qa" / "run.py"
+_CROSSFIRE_OUTPUT_DIR = _PROJECT_DIR / "crossfire_qa_output"
 
 app = FastAPI(title="QA PlayTest Manager Control", version="0.1.0")
 
@@ -59,6 +65,11 @@ class DashboardAnalyzeRequest(BaseModel):
 
 class FinalReportRequest(BaseModel):
     resultDir: str
+
+
+def _safe_slug(value: str) -> str:
+    safe = "".join(char if char.isalnum() or char in ("-", "_") else "_" for char in value.strip())
+    return safe.strip("_") or "dataset"
 
 
 def _safe_result_path(result_dir: str, child_path: str = "") -> Path:
@@ -129,20 +140,66 @@ def dashboard_browse():
     return {"path": pick_directory()}
 
 
+@app.get("/dashboard/health")
+def dashboard_health():
+    return {"ok": True, "report": "final_report.json"}
+
+
 @app.post("/dashboard/analyze")
 def dashboard_analyze(payload: DashboardAnalyzeRequest):
-    # TODO: analyze.py 연동 시 여기서 subprocess 실행
-    result_dir = payload.videoDirectory
     if os.environ.get("LOVEBUG_UI_MOCK") == "1":
-        result_dir = str(_MOCK_RESULTS_DIR)
-    return {"ok": True, "resultDir": result_dir}
+        return {"ok": True, "resultDir": str(_MOCK_RESULTS_DIR)}
+
+    if not payload.videoDirectory:
+        raise HTTPException(status_code=400, detail="videoDirectory is required")
+
+    dataset = Path(payload.videoDirectory).expanduser().resolve()
+    if not dataset.exists():
+        raise HTTPException(status_code=404, detail=f"videoDirectory not found: {dataset}")
+
+    if (dataset / "final_report.json").exists():
+        return {"ok": True, "resultDir": str(dataset)}
+
+    run_name = f"output_from_{_safe_slug(dataset.name)}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    result_dir = (_CROSSFIRE_OUTPUT_DIR / run_name / "run_output").resolve()
+    result_dir.mkdir(parents=True, exist_ok=True)
+
+    cmd = [
+        sys.executable,
+        str(_CROSSFIRE_RUNNER),
+        "--dataset",
+        str(dataset),
+        "--out",
+        str(result_dir),
+        "--keep-going",
+    ]
+    try:
+        completed = subprocess.run(
+            cmd,
+            cwd=str(_PROJECT_DIR),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"failed to start analysis: {exc}") from exc
+
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "analysis failed").strip()
+        raise HTTPException(status_code=500, detail=detail[-4000:])
+
+    final_report = result_dir / "final_report.json"
+    if not final_report.exists():
+        raise HTTPException(status_code=500, detail=f"analysis completed but final_report.json was not created: {final_report}")
+
+    return {"ok": True, "resultDir": str(result_dir)}
 
 
 @app.post("/dashboard/final-report")
 def dashboard_final_report(req: FinalReportRequest):
     report_path = _safe_result_path(req.resultDir, "final_report.json")
     if not report_path.exists():
-        raise HTTPException(status_code=404, detail="final_report.json not found")
+        raise HTTPException(status_code=404, detail=f"final_report.json not found: {report_path}")
     return json.loads(report_path.read_text(encoding="utf-8"))
 
 
