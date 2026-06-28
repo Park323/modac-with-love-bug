@@ -70,9 +70,10 @@ window.MapSelector = (function () {
   function drawWaypoints() {
     waypoints.forEach((wp, i) => {
       const [cx, cy] = toCanvas(wp.x, wp.y);
-      drawArrow(cx, cy, wp.rot, 14, "#e74c3c");
+      const color = wp.action ? "#1f6feb" : "#e74c3c";
+      drawArrow(cx, cy, wp.rot, 14, color);
       ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2);
-      ctx.fillStyle = "#e74c3c"; ctx.fill();
+      ctx.fillStyle = color; ctx.fill();
       ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5; ctx.stroke();
       ctx.fillStyle = "#fff"; ctx.font = "bold 8px sans-serif";
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -106,6 +107,7 @@ window.MapSelector = (function () {
       x: Number(wp.x),
       y: Number(wp.y),
       rot: Number.isFinite(Number(wp.rot)) ? Number(wp.rot) : 90,
+      action: wp.action || null,
     })).filter((wp) => Number.isFinite(wp.x) && Number.isFinite(wp.y));
 
     let lastRot = 90;
@@ -133,7 +135,8 @@ window.MapSelector = (function () {
         '<span class="wp-num">' + (i + 1) + '</span>' +
         '<span class="wp-coords">x: ' + wp.x.toFixed(1) +
         '<br>y: ' + wp.y.toFixed(1) +
-        '<br>rot: ' + wp.rot.toFixed(1) + '°</span>' +
+        '<br>rot: ' + wp.rot.toFixed(1) + '°' +
+        (wp.action ? '<br>action: ' + wp.action : '') + '</span>' +
         '<button type="button" data-remove="' + i + '">✕</button>';
       listEl.appendChild(div);
     });

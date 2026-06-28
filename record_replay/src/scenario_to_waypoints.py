@@ -14,6 +14,8 @@ Each returned waypoint carries:
   - ``rot``                  : facing in degrees clockwise from north, derived
                                from the path direction (not asked of the model,
                                which is unreliable at it)
+  - ``action``               : optional action to perform at this waypoint
+                               (e.g. "jump")
   - ``label``                : short description of the point
 
 Provider: Google Gemini via OpenRouter (OpenAI-compatible, vision).
@@ -159,10 +161,14 @@ class PlannedWaypoint:
     y_aligned: float
     x:         float    # real-map coord (1980×654) — what navigator/locate use
     y:         float
+    action:    str | None = None
 
     def to_output(self) -> dict:
-        """The required output shape: {idx, x, y}."""
-        return {"idx": self.idx, "x": self.x, "y": self.y}
+        """The required output shape: {idx, x, y, action?}."""
+        out = {"idx": self.idx, "x": self.x, "y": self.y}
+        if self.action:
+            out["action"] = self.action
+        return out
 
 
 # ── prompt ────────────────────────────────────────────────────────────────────
@@ -180,8 +186,12 @@ _RESULT_SCHEMA = {
                     "label": {"type": "string"},
                     "x":     {"type": "number"},
                     "y":     {"type": "number"},
+                    "action": {
+                        "type": ["string", "null"],
+                        "enum": ["jump", None],
+                    },
                 },
-                "required": ["label", "x", "y"],
+                "required": ["label", "x", "y", "action"],
             },
         },
     },
@@ -221,6 +231,10 @@ def _system_prompt() -> str:
         "  - Choose as many waypoints as the route genuinely needs to round obstacles and "
         "    follow the described path — no more, no fewer.\n"
         "  - Give each a short label (e.g. 'start', 'center corridor', 'enemy spawn').\n"
+        "  - If the scenario says to jump at or near a place, set action=\"jump\" on the "
+        "    waypoint for that place. For example, in 'A를 지나 B에서 점프하고 G로 이동', "
+        "    the waypoint at B must have action=\"jump\". For normal movement waypoints, "
+        "    set action to null.\n"
     )
 
 
@@ -290,10 +304,15 @@ def plan_waypoints(
     # clamp to image bounds, convert to real-map, then derive facings from the path
     w, h = ALIGNED_WH
     aligned = [
-        (max(0.0, min(float(wp["x"]), w)), max(0.0, min(float(wp["y"]), h)), str(wp["label"]))
+        (
+            max(0.0, min(float(wp["x"]), w)),
+            max(0.0, min(float(wp["y"]), h)),
+            str(wp["label"]),
+            "jump" if wp.get("action") == "jump" else None,
+        )
         for wp in parsed["waypoints"]
     ]
-    pts_map = [(ax * SCALE, ay * SCALE) for ax, ay, _ in aligned]   # real-map floats
+    pts_map = [(ax * SCALE, ay * SCALE) for ax, ay, _, _ in aligned]   # real-map floats
 
     # snap any point inside/near an obstacle to the nearest walkable cell
     if snap:
@@ -302,7 +321,8 @@ def plan_waypoints(
             grid = _build_walkable_grid(json.loads(info_path.read_text(encoding="utf-8")))
             pts_map = [_snap_to_walkable(x, y, grid) for x, y in pts_map]
 
-    labels = [lbl for _, _, lbl in aligned]
+    labels = [lbl for _, _, lbl, _ in aligned]
+    actions = [action for _, _, _, action in aligned]
     return [
         PlannedWaypoint(
             idx=i,
@@ -311,6 +331,7 @@ def plan_waypoints(
             y_aligned=round(pts_map[i][1] / SCALE, 1),
             x=round(float(pts_map[i][0]), 1),
             y=round(float(pts_map[i][1]), 1),
+            action=actions[i],
         )
         for i in range(len(pts_map))
     ]
