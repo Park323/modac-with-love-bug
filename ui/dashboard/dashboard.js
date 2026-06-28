@@ -24,21 +24,19 @@ function resultClass(result) {
 }
 
 function getChecks(report) {
-  if (Array.isArray(report.checks)) return report.checks;
-  if (Array.isArray(report.qa_checks)) return report.qa_checks;
-  return [];
+  return Array.isArray(report.qa_checks) ? report.qa_checks : [];
 }
 
 function getAnalyzedFileCount(report) {
-  if (Array.isArray(report.input_videos)) return report.input_videos.length;
-  const names = getChecks(report)
-    .map((check) => check.video_name || check.video_id)
-    .filter(Boolean);
-  return new Set(names).size || "-";
+  return Array.isArray(report.input_videos) ? report.input_videos.length : "-";
 }
 
 function getIssueCount(report) {
-  return report.review_summary?.shown_checks ?? getChecks(report).length;
+  const counts = report.summary?.result_counts;
+  if (!counts || typeof counts !== "object") return 0;
+  return REVIEW_FILTERS
+    .filter((result) => result !== "ALL")
+    .reduce((total, result) => total + Number(counts[result] || 0), 0);
 }
 
 function getPackagedStageReports(report) {
@@ -57,6 +55,41 @@ function getPackagedStageReports(report) {
       };
     })
     .filter((stageGroup) => stageGroup.reports.length);
+}
+
+function getCheckConditions(check) {
+  return Array.isArray(check.decision_trace?.conditions) ? check.decision_trace.conditions : [];
+}
+
+function getCheckArtifacts(check) {
+  const evidenceItems = Array.isArray(check.evidence) ? check.evidence : [];
+  const linkedEvidenceItems = Array.isArray(check.trace_links?.evidence_items)
+    ? check.trace_links.evidence_items
+    : [];
+  const moduleReports = check.trace_links?.module_reports && typeof check.trace_links.module_reports === "object"
+    ? Object.entries(check.trace_links.module_reports).map(([name, path]) => ({
+        kind: name,
+        type: "module_report",
+        path
+    }))
+    : [];
+
+  return evidenceItems.concat(linkedEvidenceItems, moduleReports);
+}
+
+function formatCheckTime(check) {
+  if (Array.isArray(check.time_range_sec)) {
+    const [start, end] = check.time_range_sec;
+    if (typeof start === "number" && typeof end === "number" && start !== end) {
+      return `${fmtNumber(start)}s - ${fmtNumber(end)}s`;
+    }
+    if (typeof start === "number") return `${fmtNumber(start)}s`;
+  }
+  return "-";
+}
+
+function getCheckReason(check) {
+  return check.reason || check.decision_trace?.final_decision_reason || "-";
 }
 
 function formatReportLabel(label) {
@@ -87,18 +120,10 @@ function renderResultMetrics(report) {
 }
 
 function getResultCounts(report) {
-  const checks = getChecks(report);
   const counts = Object.fromEntries(QA_RESULTS.map((result) => [result, 0]));
 
-  if (report.summary?.result_counts) {
-    QA_RESULTS.forEach((result) => {
-      counts[result] = Number(report.summary.result_counts[result] || 0);
-    });
-    return counts;
-  }
-
-  checks.forEach((check) => {
-    if (counts[check.result] !== undefined) counts[check.result] += 1;
+  QA_RESULTS.forEach((result) => {
+    counts[result] = Number(report.summary?.result_counts?.[result] || 0);
   });
   return counts;
 }
@@ -106,7 +131,7 @@ function getResultCounts(report) {
 function renderSummary(report) {
   const summary = report.summary || {};
   const counts = getResultCounts(report);
-  const totalChecks = summary.total_checks ?? getChecks(report).length;
+  const totalChecks = summary.total_checks ?? 0;
   const items = [
     ["PASS", `${counts.PASS} / ${totalChecks}`],
     ["FAIL", `${counts.FAIL} / ${totalChecks}`],
@@ -118,7 +143,7 @@ function renderSummary(report) {
     <section class="final-report__section">
       <div class="section-heading">
         <h4>요약</h4>
-        <span>${esc(report.package_type || report.game || "QA package")} · schema ${esc(report.schema_version || "-")}</span>
+        <span>${esc(report.game || "QA report")} · schema ${esc(report.schema_version || "-")}</span>
       </div>
       <div class="summary-grid">
         ${items.map(([label, value]) => `
@@ -223,10 +248,10 @@ function renderQaReport(report, state) {
                     <span class="result-badge result-badge--${resultClass(check.result)}">${esc(check.result)}</span>
                   </div>
                   <div class="qa-check-card__meta">
-                    <span>이벤트 시각: ${fmtNumber(check.focus_time_sec)}s</span>
-                    <span>파일: ${esc(check.video_name || check.video_id || "-")}</span>
+                    <span>이벤트 시각: ${esc(formatCheckTime(check))}</span>
+                    <span>파일: ${esc(check.video_id || "-")}</span>
                   </div>
-                  <p>메세지: "${esc(check.reason || check.final_decision_reason || "-")}"</p>
+                  <p>메세지: "${esc(getCheckReason(check))}"</p>
                 </div>
                 ${canExpand ? `
                   <button class="secondary-button qa-detail-button" type="button" data-check-detail="${esc(check.check_id)}">
@@ -257,8 +282,8 @@ function renderQaReport(report, state) {
 }
 
 function renderCheckDetail(check) {
-  const conditions = Array.isArray(check.conditions) ? check.conditions : [];
-  const artifacts = Array.isArray(check.artifacts) ? check.artifacts : [];
+  const conditions = getCheckConditions(check);
+  const artifacts = getCheckArtifacts(check);
 
   return `
     <div class="qa-detail">
@@ -446,13 +471,22 @@ function initDashboardPage() {
       const reportDetail = document.createElement("div");
       reportArea.appendChild(reportDetail);
 
-      const manifestRes = await fetch("/dashboard/package-manifest", {
+      const reportRes = await fetch("/dashboard/final-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resultDir })
       });
-      if (!manifestRes.ok) throw new Error(`package_manifest.json을 읽지 못했습니다. (${manifestRes.status})`);
-      const report = await manifestRes.json();
+      if (!reportRes.ok) {
+        let detail = "";
+        try {
+          const errorBody = await reportRes.json();
+          detail = errorBody.detail ? ` ${errorBody.detail}` : "";
+        } catch (parseErr) {
+          detail = "";
+        }
+        throw new Error(`final_report.json을 읽지 못했습니다. (${reportRes.status})${detail}`);
+      }
+      const report = await reportRes.json();
       renderResultMetrics(report);
       mountFinalReport(reportDetail, report, resultDir);
 
@@ -465,7 +499,7 @@ function initDashboardPage() {
       reportArea.innerHTML = `
         <div class="empty-state">
           <div>
-            <strong>package_manifest.json을 읽지 못했습니다.</strong>
+            <strong>final_report.json을 읽지 못했습니다.</strong>
             <span>${esc(err.message || err)}</span>
           </div>
         </div>

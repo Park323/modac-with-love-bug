@@ -28,8 +28,8 @@ function waitForServer(url, retries = 30, intervalMs = 300) {
   return new Promise((resolve, reject) => {
     let attempts = 0;
     const check = () => {
-      http.get(`${url}/run/status`, (res) => {
-        if (res.statusCode < 500) resolve();
+      http.get(`${url}/dashboard/health`, (res) => {
+        if (res.statusCode === 200) resolve();
         else retry();
       }).on("error", retry);
     };

@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -22,9 +23,10 @@ from manager.capture_stub import StubCaptureModule
 from record_replay.src.scenario_to_waypoints import scenario_to_waypoints
 
 _UI_DIR = Path(__file__).resolve().parents[2] / "ui"
+_PROJECT_DIR = _UI_DIR.parent
 _MOCK_RESULTS_DIR = _UI_DIR / "mock" / "results"
-_CROSSFIRE_QA_DIR = Path(__file__).resolve().parents[2] / "crossfire_qa"
-_QA_OUTPUT_ROOT = Path(__file__).resolve().parents[2] / "crossfire_qa_output"
+_CROSSFIRE_RUNNER = _PROJECT_DIR / "crossfire_qa" / "run.py"
+_CROSSFIRE_OUTPUT_DIR = _PROJECT_DIR / "crossfire_qa_output"
 
 app = FastAPI(title="QA PlayTest Manager Control", version="0.1.0")
 
@@ -85,8 +87,13 @@ class DashboardAnalyzeRequest(BaseModel):
     requestedAt: str | None = None
 
 
-class PackageManifestRequest(BaseModel):
+class FinalReportRequest(BaseModel):
     resultDir: str
+
+
+def _safe_slug(value: str) -> str:
+    safe = "".join(char if char.isalnum() or char in ("-", "_") else "_" for char in value.strip())
+    return safe.strip("_") or "dataset"
 
 
 def _safe_result_path(result_dir: str, child_path: str = "") -> Path:
@@ -180,56 +187,67 @@ def dashboard_browse():
     return {"path": pick_directory()}
 
 
+@app.get("/dashboard/health")
+def dashboard_health():
+    return {"ok": True, "report": "final_report.json"}
+
+
 @app.post("/dashboard/analyze")
 def dashboard_analyze(payload: DashboardAnalyzeRequest):
     if os.environ.get("LOVEBUG_UI_MOCK") == "1":
         return {"ok": True, "resultDir": str(_MOCK_RESULTS_DIR)}
 
-    video_dir = Path(payload.videoDirectory or "").expanduser().resolve()
-    if not video_dir.exists():
-        raise HTTPException(status_code=400, detail="디렉토리를 찾을 수 없습니다.")
+    if not payload.videoDirectory:
+        raise HTTPException(status_code=400, detail="videoDirectory is required")
 
-    run_output_dir = _QA_OUTPUT_ROOT / f"output_from_{video_dir.name}" / "run_output"
-    package_dir = _QA_OUTPUT_ROOT / f"output_from_{video_dir.name}" / "review_package"
+    dataset = Path(payload.videoDirectory).expanduser().resolve()
+    if not dataset.exists():
+        raise HTTPException(status_code=404, detail=f"videoDirectory not found: {dataset}")
 
-    run_proc = subprocess.run(
-        [
-            sys.executable,
-            str(_CROSSFIRE_QA_DIR / "run.py"),
-            "--dataset", str(video_dir),
-            "--out", str(run_output_dir),
-        ],
-        cwd=str(_CROSSFIRE_QA_DIR),
-        capture_output=True,
-        text=True,
-    )
-    if run_proc.returncode != 0:
-        raise HTTPException(status_code=500, detail=run_proc.stderr or "파이프라인 실행 실패")
+    if (dataset / "final_report.json").exists():
+        return {"ok": True, "resultDir": str(dataset)}
 
-    pkg_proc = subprocess.run(
-        [
-            sys.executable,
-            str(_CROSSFIRE_QA_DIR / "build_qa_review_package.py"),
-            "--run-dir", str(run_output_dir),
-            "--out", str(package_dir),
-            "--clean",
-        ],
-        cwd=str(_CROSSFIRE_QA_DIR),
-        capture_output=True,
-        text=True,
-    )
-    if pkg_proc.returncode != 0:
-        raise HTTPException(status_code=500, detail=pkg_proc.stderr or "패키지 빌드 실패")
+    run_name = f"output_from_{_safe_slug(dataset.name)}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    result_dir = (_CROSSFIRE_OUTPUT_DIR / run_name / "run_output").resolve()
+    result_dir.mkdir(parents=True, exist_ok=True)
 
-    return {"ok": True, "resultDir": str(package_dir)}
+    cmd = [
+        sys.executable,
+        str(_CROSSFIRE_RUNNER),
+        "--dataset",
+        str(dataset),
+        "--out",
+        str(result_dir),
+        "--keep-going",
+    ]
+    try:
+        completed = subprocess.run(
+            cmd,
+            cwd=str(_PROJECT_DIR),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"failed to start analysis: {exc}") from exc
+
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "analysis failed").strip()
+        raise HTTPException(status_code=500, detail=detail[-4000:])
+
+    final_report = result_dir / "final_report.json"
+    if not final_report.exists():
+        raise HTTPException(status_code=500, detail=f"analysis completed but final_report.json was not created: {final_report}")
+
+    return {"ok": True, "resultDir": str(result_dir)}
 
 
-@app.post("/dashboard/package-manifest")
-def dashboard_package_manifest(req: PackageManifestRequest):
-    manifest_path = _safe_result_path(req.resultDir, "package_manifest.json")
-    if not manifest_path.exists():
-        raise HTTPException(status_code=404, detail="package_manifest.json not found")
-    return json.loads(manifest_path.read_text(encoding="utf-8"))
+@app.post("/dashboard/final-report")
+def dashboard_final_report(req: FinalReportRequest):
+    report_path = _safe_result_path(req.resultDir, "final_report.json")
+    if not report_path.exists():
+        raise HTTPException(status_code=404, detail=f"final_report.json not found: {report_path}")
+    return json.loads(report_path.read_text(encoding="utf-8"))
 
 
 @app.get("/dashboard/artifact")
