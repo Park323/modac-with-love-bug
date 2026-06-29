@@ -1,10 +1,12 @@
 # Lovebug — CrossFire QA 자동화 파이프라인
 
-> **Grand Prize winner of the 2026 Smilegate Modacthon — CrossFire QA Automation track.**
+> **Grand Prize winner of the 2026 Smilegate MODAC-THON.**
+> Our team took on the CrossFire QA Automation task — this is its public code.
 > A reference implementation built on a single game (CrossFire) and a single map (Ship 2.0),
 > cleaned up to serve as a **portable skeleton for QA pipelines on other games and maps**.
 >
-> **2026 Smilegate Modacthon - 크로스파이어 QA 자동화 트랙 최우수상 수상작**의 공개용 코드입니다.
+> **2026 Smilegate MODAC-THON 최우수상 수상작**입니다.
+> 저희 팀은 크로스파이어 QA 자동화 과제를 수행했고, 이 저장소는 그 공개용 코드입니다.
 > 한 게임(CrossFire)의 단일 맵(Ship 2.0)을 레퍼런스 구현으로 두되, **다른 게임 다른 맵에도 이식 가능한 QA 파이프라인의 뼈대**로 쓰이도록 정리한 브랜치입니다.
 
 ![Demo](demo.gif)
