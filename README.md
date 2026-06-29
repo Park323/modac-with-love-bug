@@ -9,6 +9,10 @@
 > 저희 팀은 크로스파이어 QA 자동화 과제를 수행했고, 이 저장소는 그 공개용 코드입니다.
 > 한 게임(CrossFire)의 단일 맵(Ship 2.0)을 레퍼런스 구현으로 두되, **다른 게임 다른 맵에도 이식 가능한 QA 파이프라인의 뼈대**로 쓰이도록 정리한 브랜치입니다.
 
+**Write a QA scenario in plain language — Lovebug drives the game to carry it out, then analyzes the recording to verify the result.**
+
+**자연어로 QA 시나리오를 적으면, Lovebug가 게임을 직접 플레이해 수행하고 녹화 영상을 분석해 결과를 검증합니다.**
+
 ![Demo](demo.gif)
 
 ---
