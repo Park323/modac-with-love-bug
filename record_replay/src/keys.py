@@ -1,11 +1,16 @@
-"""Key name ↔ VK code mappings, scan code lookup, and polling lists."""
+"""Key name ↔ VK code mappings, scan code lookup, and polling lists.
+
+Shared input-key core. This module is the single source of truth for VK code
+maps; ``auto_run_action`` and ``test_scenario_executor`` re-export from here.
+It is import-safe on non-Windows hosts (the Windows API is only touched lazily
+inside the functions), so it can be imported under test on any platform.
+"""
 
 from __future__ import annotations
 
 import ctypes
-from ctypes import wintypes
+import sys
 
-_user32 = ctypes.windll.user32
 MAPVK_VK_TO_VSC = 0
 
 # ── VK code constants ─────────────────────────────────────────────────────────
@@ -77,11 +82,18 @@ ALL_KEYBOARD_VKS: list[int] = [
 ]
 
 
-# ── scan code lookup ──────────────────────────────────────────────────────────
+# ── platform guard + scan code lookup ──────────────────────────────────────────
+
+def require_windows() -> None:
+    if sys.platform != "win32":
+        raise RuntimeError("keyboard/mouse control requires Windows")
+
 
 def scan_code_for_vk(vk: int) -> int:
-    """Return the hardware scan code for a VK code (0 if unknown)."""
-    scan = int(_user32.MapVirtualKeyW(vk, MAPVK_VK_TO_VSC))
+    """Return the hardware scan code for a VK code (0 if unknown / non-Windows)."""
+    if sys.platform != "win32":
+        return 0
+    scan = int(ctypes.windll.user32.MapVirtualKeyW(vk, MAPVK_VK_TO_VSC))
     # Arrow keys need explicit scan codes when MapVirtualKeyW returns 0
     _arrow_fallback = {0x25: 0x4B, 0x26: 0x48, 0x27: 0x4D, 0x28: 0x50}
     return scan or _arrow_fallback.get(vk, 0)

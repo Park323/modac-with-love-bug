@@ -2,16 +2,22 @@
 Low-level Windows input injection.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  TEAMMATE SECTION — this is the file to edit when
-  updating injection logic, adding new event types,
+  Shared input-injection core — single source of truth.
+  ``auto_run_action`` and ``test_scenario_executor`` re-export from here.
+
+  Edit this file when updating injection logic, adding new event types,
   or changing how input is sent to the game.
 
-  Public interface (used by replayer.py):
+  Public interface:
     send_keyboard_scan(scan, extended, is_up)  ← primary path
     send_keyboard_vk(vk, is_up)                ← fallback for old recordings
-    send_mouse_relative(dx, dy)                 ← FPS raw-input move
-    send_mouse_absolute(x, y, flags, data)      ← hook/poll recorded positions
-    send_mouse_button(flag)                     ← button down/up
+    send_mouse_relative(dx, dy)                ← FPS raw-input move
+    send_mouse_absolute(x, y, flags, data)     ← hook/poll recorded positions
+    send_mouse_button(flag)                    ← button down/up
+    screen_center() / move_cursor_to_center()  ← fix cursor origin before record/play
+
+  The Windows API is touched only lazily via ``_user32()`` (guarded by
+  ``require_windows``), so this module is import-safe on any platform.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
@@ -20,7 +26,7 @@ from __future__ import annotations
 import ctypes
 from ctypes import wintypes
 
-_user32 = ctypes.windll.user32
+from .keys import require_windows
 
 # ── constants ─────────────────────────────────────────────────────────────────
 
@@ -45,6 +51,8 @@ MOUSEEVENTF_HWHEEL      = 0x1000
 MOUSEEVENTF_ABSOLUTE    = 0x8000
 MOUSEEVENTF_VIRTUALDESK = 0x4000
 
+SM_CXSCREEN        = 0
+SM_CYSCREEN        = 1
 SM_XVIRTUALSCREEN  = 76
 SM_YVIRTUALSCREEN  = 77
 SM_CXVIRTUALSCREEN = 78
@@ -84,6 +92,11 @@ class INPUT(ctypes.Structure):
     _fields_ = [("type", wintypes.DWORD), ("union", _INPUT_UNION)]
 
 
+def _user32():
+    require_windows()
+    return ctypes.windll.user32
+
+
 # ── keyboard ─────────────────────────────────────────────────────────────────
 
 def send_keyboard_scan(scan: int, extended: bool, is_up: bool) -> None:
@@ -97,7 +110,7 @@ def send_keyboard_scan(scan: int, extended: bool, is_up: bool) -> None:
         type=INPUT_KEYBOARD,
         union=_INPUT_UNION(ki=KEYBDINPUT(wVk=0, wScan=scan, dwFlags=flags)),
     )
-    _user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
+    _user32().SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
 
 
 def send_keyboard_vk(vk: int, is_up: bool) -> None:
@@ -107,7 +120,7 @@ def send_keyboard_vk(vk: int, is_up: bool) -> None:
         type=INPUT_KEYBOARD,
         union=_INPUT_UNION(ki=KEYBDINPUT(wVk=vk, wScan=0, dwFlags=flags)),
     )
-    _user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
+    _user32().SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
 
 
 # ── mouse ─────────────────────────────────────────────────────────────────────
@@ -118,15 +131,16 @@ def send_mouse_relative(dx: int, dy: int) -> None:
         type=INPUT_MOUSE,
         union=_INPUT_UNION(mi=MOUSEINPUT(dx=dx, dy=dy, dwFlags=MOUSEEVENTF_MOVE)),
     )
-    _user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
+    _user32().SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
 
 
 def send_mouse_absolute(x: int, y: int, flags: int, data: int = 0) -> None:
     """Absolute mouse movement — used when hook/poll recordings store screen coords."""
-    left   = _user32.GetSystemMetrics(SM_XVIRTUALSCREEN)
-    top    = _user32.GetSystemMetrics(SM_YVIRTUALSCREEN)
-    width  = max(1, _user32.GetSystemMetrics(SM_CXVIRTUALSCREEN) - 1)
-    height = max(1, _user32.GetSystemMetrics(SM_CYVIRTUALSCREEN) - 1)
+    user32 = _user32()
+    left   = user32.GetSystemMetrics(SM_XVIRTUALSCREEN)
+    top    = user32.GetSystemMetrics(SM_YVIRTUALSCREEN)
+    width  = max(1, user32.GetSystemMetrics(SM_CXVIRTUALSCREEN) - 1)
+    height = max(1, user32.GetSystemMetrics(SM_CYVIRTUALSCREEN) - 1)
     nx = int((x - left) * 65535 / width)
     ny = int((y - top) * 65535 / height)
     inp = INPUT(
@@ -138,7 +152,26 @@ def send_mouse_absolute(x: int, y: int, flags: int, data: int = 0) -> None:
             )
         ),
     )
-    _user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
+    user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
+
+
+def screen_center() -> tuple[int, int]:
+    """기본 모니터 중심 좌표 (cx, cy)."""
+    user32 = _user32()
+    cx = user32.GetSystemMetrics(SM_CXSCREEN) // 2
+    cy = user32.GetSystemMetrics(SM_CYSCREEN) // 2
+    return int(cx), int(cy)
+
+
+def move_cursor_to_center() -> tuple[int, int]:
+    """커서를 기본 모니터 중심으로 즉시 이동하고 (cx, cy) 반환.
+
+    마우스 입력이 상대 이동(dx/dy)으로 기록/재생되므로, Record/Play 시작 시
+    커서 원점을 항상 화면 중심으로 고정해 시작 위치에 따른 결과 차이를 없앤다.
+    """
+    cx, cy = screen_center()
+    _user32().SetCursorPos(cx, cy)
+    return cx, cy
 
 
 def send_mouse_button(flag: int, data: int = 0) -> None:
@@ -147,4 +180,4 @@ def send_mouse_button(flag: int, data: int = 0) -> None:
         type=INPUT_MOUSE,
         union=_INPUT_UNION(mi=MOUSEINPUT(mouseData=data, dwFlags=flag)),
     )
-    _user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
+    _user32().SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
